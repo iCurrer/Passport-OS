@@ -31,7 +31,7 @@ void app_main(void)
         ESP_LOGE(TAG, "显示/LVGL 初始化失败,无法进入名牌界面");
         return;
     }
-    bsp_display_backlight(80);
+    bsp_display_backlight(70);
 
     // 软依赖:电池缺失不阻塞(名牌电量显示 --%);按键失败则无法交互。
     bsp_battery_init();

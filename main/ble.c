@@ -116,6 +116,8 @@ static void start_advertising(void)
 
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;   // 可连接
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;   // 可发现
+    adv_params.itvl_min = 1600;                     // 广播间隔 1000ms(0.625ms单位),降低广播功耗
+    adv_params.itvl_max = 1600;
     ble_gap_adv_start(BLE_OWN_ADDR_PUBLIC, NULL, BLE_HS_FOREVER,
                       &adv_params, gap_event, NULL);
 }

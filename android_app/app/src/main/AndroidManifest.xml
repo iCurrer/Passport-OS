@@ -14,7 +14,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <application
-        android:label="FoloToy Badge"
+        android:label="AI名牌"
         android:theme="@style/Theme.FoloToyBadge"
         android:allowBackup="false">
         <activity

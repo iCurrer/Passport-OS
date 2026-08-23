@@ -14,6 +14,7 @@
 #include "badge_fonts.h"
 #include "badge_avatar.h"
 #include "bsp_display.h"    // bsp_lvgl_lock / unlock / backlight
+#include "esp_lcd_panel_ops.h"   // esp_lcd_panel_disp_on_off(深睡关屏省电)
 #include "bsp_battery.h"
 #include "bsp_pins.h"       // BSP_BTN_ADC_CHANNEL(唤醒引脚)
 #include "lvgl.h"
@@ -59,8 +60,8 @@ static const char *TAG = "badge";
 #define LAYOUT_TITLE_Y      152    // 职位(次,14px)
 #define LAYOUT_STATUS_Y     172    // 状态文字(辅,14px)
 #define LAYOUT_STATUS_DOT_Y 177    // 状态前置圆点(6x6)
-#define LAYOUT_DOCK_LINE    272    // dock 顶部分隔线
-#define LAYOUT_DOCK_Y       274    // dock 背景起点
+#define LAYOUT_DOCK_LINE    262    // dock 顶部分隔线
+#define LAYOUT_DOCK_Y       264    // dock 背景起点
 
 #define DOCK_COUNT  2          // 底部 dock 图标数
 
@@ -78,7 +79,7 @@ static nvs_handle_t s_nvs;
 // ---------------------------------------------------------------------------
 // 电源 / 计时
 // ---------------------------------------------------------------------------
-#define AUTO_OFF_MS    (3u * 60u * 1000u)   // 3 分钟无操作自动深度睡眠
+#define AUTO_OFF_MS    (7u * 60u * 1000u)   // 7 分钟无操作自动深度睡眠
 #define BOOT_IGNORE_US (800u * 1000u)        // 开机前忽略按键,防唤醒键误触
 
 static esp_timer_handle_t s_auto_timer;
@@ -156,8 +157,12 @@ static void batt_tick(lv_timer_t *t) { (void)t; update_battery(); }
 static void enter_deep_sleep(void)
 {
     if (s_nvs) nvs_commit(s_nvs);
-    ESP_LOGI(TAG, "进入深度睡眠(3分钟无操作自动,任意键唤醒)");
+    ESP_LOGI(TAG, "进入深度睡眠(7分钟无操作自动,任意键唤醒)");
     bsp_display_backlight(0);
+
+    // 关闭 LCD 面板显示,降低深睡时面板静态漏电
+    esp_lcd_panel_handle_t panel = bsp_display_panel();
+    if (panel) esp_lcd_panel_disp_on_off(panel, false);
 
     // 确保 GPIO0 在深度睡眠时作为数字输入并上拉,避免因内部/外部电阻干扰而误唤醒。
     // (按键松开时外部 10k 上拉到高,按下拉低;低电平唤醒只在真正按键时触发。)
@@ -263,7 +268,7 @@ static void dock_draw(void)
     s_dock = lv_obj_create(s_scr);
     lv_obj_remove_flag(s_dock, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_pos(s_dock, 0, LAYOUT_DOCK_Y);
-    lv_obj_set_size(s_dock, 240, 46);
+    lv_obj_set_size(s_dock, 240, 320 - LAYOUT_DOCK_Y);   // 容器高度延伸到屏幕底
     lv_obj_set_style_bg_opa(s_dock, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_dock, 0, 0);
     lv_obj_set_style_pad_all(s_dock, 0, 0);
@@ -348,7 +353,7 @@ void badge_enter(void)
 
     // ===================== 底部 dock 功能区 =====================
     blk(s_scr, 0, LAYOUT_DOCK_LINE, 240, 2, LINE_DIV);       // dock 顶部分隔线
-    blk(s_scr, 0, LAYOUT_DOCK_Y, 240, 46, DOCK_BG);          // dock 背景
+    blk(s_scr, 0, LAYOUT_DOCK_Y, 240, 320 - LAYOUT_DOCK_Y, DOCK_BG);   // dock 背景(延伸到屏幕底)
     dock_draw();                            // 两个占位图标(高亮当前选中)
 
     update_battery();

@@ -6,6 +6,8 @@ import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -14,6 +16,10 @@ import android.widget.*
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.textfield.TextInputLayout
+import com.google.android.material.chip.Chip
 import java.util.UUID
 
 /**
@@ -47,21 +53,29 @@ class MainActivity : ComponentActivity() {
     private val writeQueue = mutableListOf<Pair<BluetoothGattCharacteristic, String>>()
 
     // ---- UI ----
-    private lateinit var statusTv: TextView
+    private lateinit var statusChip: Chip
     private lateinit var nameEt: EditText
     private lateinit var topEt: EditText
     private lateinit var titleEt: EditText
     private lateinit var statusEt: EditText
+    private lateinit var scanBtn: MaterialButton
+    private lateinit var readBtn: MaterialButton
+    private lateinit var writeBtn: MaterialButton
 
     // 请求权限结果
     private val permLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         if (result.values.all { it }) {
-            statusTv.text = "权限已授予,点击「扫描」"
+            setConnectionState(ConnectionState.DISCONNECTED, "点击「扫描并连接」")
         } else {
-            statusTv.text = "缺少权限,无法使用蓝牙"
+            setConnectionState(ConnectionState.ERROR, "缺少权限,无法使用蓝牙")
         }
+    }
+
+    // ---- 连接状态枚举 ----
+    private enum class ConnectionState {
+        DISCONNECTED, SCANNING, CONNECTING, CONNECTED, ERROR
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -70,80 +84,235 @@ class MainActivity : ComponentActivity() {
         ensurePermissions()
     }
 
-    // ---------- UI(代码构建,避免额外布局文件) ----------
+    // ---------- UI(使用 Material3 组件构建) ----------
     private fun buildUi() {
+        // 根容器:浅灰背景 + 垂直滚动
+        val scrollView = ScrollView(this).apply {
+            setBackgroundColor(themeColor(com.google.android.material.R.attr.colorSurface))
+            setClipToPadding(false)
+            // 顶部/左右留白,避免内容顶到状态栏或贴边
+            setPadding(dp(20), dp(24), dp(20), dp(24))
+        }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(32, 48, 32, 32)
+            setPadding(0, 0, 0, dp(12))
         }
 
-        fun label(text: String) = TextView(this).apply {
-            this.text = text
-            textSize = 18f
-            setPadding(0, 24, 0, 4)
+        // ---- 顶部标题区域 ----
+        val headerCard = MaterialCardView(this).apply {
+            setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.transparent))
+            cardElevation = 0f
+            strokeWidth = 0
+            radius = 0f
+            setContentPadding(dp(4), dp(8), dp(4), dp(0))
+        }
+        val headerInner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        headerInner.addView(TextView(this).apply {
+            text = "AI 名牌"
+            textSize = 26f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurface))
+        })
+        headerInner.addView(TextView(this).apply {
+            text = "AI 电子名牌配置工具"
+            textSize = 14f
+            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            setPadding(0, dp(2), 0, 0)
+        })
+        headerCard.addView(headerInner)
+        root.addView(headerCard)
+
+        // ---- 连接状态区域 ----
+        val statusCard = MaterialCardView(this).apply {
+            radius = dp(16).toFloat()
+            cardElevation = dp(2).toFloat()
+            strokeWidth = 0
+            setContentPadding(dp(16), dp(14), dp(16), dp(14))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(16) }
         }
 
-        fun field(text: String) = EditText(this).apply {
-            setText(text)
-            textSize = 18f
-            hint = text
-            maxLines = 1
+        val statusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
 
-        statusTv = TextView(this).apply {
+        statusChip = Chip(this).apply {
             text = "未连接"
-            textSize = 15f
-            setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_blue_dark))
+            chipIcon = null
+            setChipBackgroundColorResource(com.google.android.material.R.color.m3_sys_color_dynamic_dark_on_surface)
+            setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.white))
+            textSize = 13f
+            chipMinHeight = dp(32).toFloat()
+            isClickable = false
+            isCheckable = false
         }
 
-        root.addView(
-            Button(this).apply {
-                text = "扫描并连接"
-                setOnClickListener { startScan() }
+        scanBtn = MaterialButton(this).apply {
+            text = "扫描"
+            textSize = 14f
+            setIconResource(android.R.drawable.ic_menu_search)
+            iconSize = dp(18)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setOnClickListener { startScan() }
+            strokeWidth = 0
+            cornerRadius = dp(20)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)
+            ).apply { marginStart = dp(12) }
+        }
+
+        statusRow.addView(statusChip)
+        statusRow.addView(scanBtn)
+        statusCard.addView(statusRow)
+        root.addView(statusCard)
+
+        // ---- 输入表单卡片 ----
+        val formCard = MaterialCardView(this).apply {
+            radius = dp(20).toFloat()
+            cardElevation = dp(2).toFloat()
+            strokeWidth = 0
+            setContentPadding(dp(16), dp(16), dp(16), dp(8))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(16) }
+        }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        fun field(label: String, default: String = ""): EditText {
+            val til = TextInputLayout(this@MainActivity).apply {
+                // 用浮动标签作字段名,避免与框内文字重叠
+                this.hint = label
+                boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                setBoxCornerRadii(dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat())
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = dp(8) }
             }
-        )
-        root.addView(statusTv)
-
-        root.addView(label("姓名"))
-        nameEt = field("")
-        root.addView(nameEt)
-
-        root.addView(label("顶部文字"))
-        topEt = field("")
-        root.addView(topEt)
-
-        root.addView(label("职位"))
-        titleEt = field("")
-        root.addView(titleEt)
-
-        root.addView(label("状态"))
-        statusEt = field("")
-        root.addView(statusEt)
-
-        root.addView(
-            Button(this).apply {
-                text = "读取当前值"
-                setOnClickListener { readAll() }
+            val et = EditText(this@MainActivity).apply {
+                setText(default)
+                textSize = 16f
+                maxLines = 1
             }
-        )
-        root.addView(
-            Button(this).apply {
-                text = "写入名牌"
-                setOnClickListener { writeAll() }
-            }
-        )
+            til.addView(et)
+            form.addView(til)
+            return et
+        }
 
-        // 外层滚动容器
-        val scroll = ScrollView(this).apply { addView(root) }
-        setContentView(
-            LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.TOP
-                addView(scroll, ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT))
+        nameEt = field("姓名")
+        topEt = field("顶部文字")
+        titleEt = field("职位")
+        statusEt = field("状态")
+
+        formCard.addView(form)
+        root.addView(formCard)
+
+        // ---- 操作按钮卡片 ----
+        val actionCard = MaterialCardView(this).apply {
+            radius = dp(20).toFloat()
+            cardElevation = dp(2).toFloat()
+            strokeWidth = 0
+            setContentPadding(dp(16), dp(16), dp(16), dp(16))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(16) }
+        }
+        val actionInner = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+
+        readBtn = MaterialButton(this).apply {
+            text = "读取"
+            textSize = 14f
+            setIconResource(android.R.drawable.ic_menu_upload)
+            iconSize = dp(18)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setOnClickListener { readAll() }
+            strokeWidth = dp(1)
+            strokeColor = ColorStateList.valueOf(themeColor(com.google.android.material.R.attr.colorPrimary))
+            cornerRadius = dp(20)
+            layoutParams = LinearLayout.LayoutParams(
+                0, dp(44), 1f
+            )
+        }
+
+        writeBtn = MaterialButton(this).apply {
+            text = "写入名牌"
+            textSize = 14f
+            setIconResource(android.R.drawable.ic_menu_send)
+            iconSize = dp(18)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setOnClickListener { writeAll() }
+            strokeWidth = 0
+            cornerRadius = dp(20)
+            layoutParams = LinearLayout.LayoutParams(
+                0, dp(44), 1f
+            ).apply { marginStart = dp(12) }
+        }
+
+        actionInner.addView(readBtn)
+        actionInner.addView(writeBtn)
+        actionCard.addView(actionInner)
+        root.addView(actionCard)
+
+        // ---- 底部提示 ----
+        root.addView(TextView(this).apply {
+            text = "确保名牌处于广播状态，连接后即可读取/写入"
+            textSize = 12f
+            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
+            gravity = Gravity.CENTER
+            setPadding(0, dp(16), 0, 0)
+        })
+
+        scrollView.addView(root)
+        setContentView(scrollView)
+    }
+
+    // ---------- 更新连接状态 UI ----------
+    private fun setConnectionState(state: ConnectionState, message: String) {
+        runOnUiThread {
+            val chipColor = when (state) {
+                ConnectionState.SCANNING -> android.R.color.holo_blue_dark
+                ConnectionState.CONNECTING -> android.R.color.holo_orange_dark
+                ConnectionState.CONNECTED -> android.R.color.holo_green_dark
+                ConnectionState.ERROR -> android.R.color.holo_red_dark
+                ConnectionState.DISCONNECTED -> com.google.android.material.R.color.m3_sys_color_dynamic_dark_on_surface
             }
-        )
+            statusChip.text = message
+            statusChip.setChipBackgroundColorResource(chipColor)
+            statusChip.setTextColor(
+                ContextCompat.getColor(
+                    this,
+                    if (state == ConnectionState.CONNECTED || state == ConnectionState.DISCONNECTED)
+                        android.R.color.white
+                    else
+                        android.R.color.white
+                )
+            )
+        }
+    }
+
+    // ---------- dp 转换辅助 ----------
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density + 0.5f).toInt()
+
+    // 从当前主题解析一个颜色属性(attr)到实际颜色值。
+    // ⚠ ContextCompat.getColor() 只能接收 color 资源 ID,不能直接传 R.attr.*(会崩)。
+    private fun themeColor(attrRes: Int): Int {
+        val tv = android.util.TypedValue()
+        return if (theme.resolveAttribute(attrRes, tv, true)) {
+            if (tv.type == android.util.TypedValue.TYPE_REFERENCE) ContextCompat.getColor(this, tv.resourceId)
+            else tv.data
+        } else {
+            0xFF808080.toInt()
+        }
     }
 
     // ---------- 权限 ----------
@@ -157,7 +326,7 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isEmpty()) {
-            statusTv.text = "权限已授予,点击「扫描并连接」"
+            setConnectionState(ConnectionState.DISCONNECTED, "点击「扫描」连接名牌")
         } else {
             permLauncher.launch(needed.toTypedArray())
         }
@@ -166,24 +335,29 @@ class MainActivity : ComponentActivity() {
     // ---------- 扫描 ----------
     @SuppressLint("MissingPermission")
     private fun startScan() {
-        val adapter = bluetoothAdapter ?: run { statusTv.text = "设备不支持蓝牙"; return }
-        if (!adapter.isEnabled) { statusTv.text = "请先打开手机蓝牙"; return }
+        val adapter = bluetoothAdapter ?: run { setConnectionState(ConnectionState.ERROR, "设备不支持蓝牙"); return }
+        if (!adapter.isEnabled) { setConnectionState(ConnectionState.ERROR, "请先打开手机蓝牙"); return }
         stopScan()
 
-        statusTv.text = "扫描中...(需名牌处于广播状态)"
+        setConnectionState(ConnectionState.SCANNING, "扫描中...")
         scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 val name = result.device.name
                 if (name == DEVICE_NAME) {
                     targetDevice = result.device
-                    statusTv.text = "找到 $DEVICE_NAME,连接中..."
+                    setConnectionState(ConnectionState.CONNECTING, "找到 $DEVICE_NAME,连接中...")
                     connect(result.device)
                 }
             }
         }
         adapter.bluetoothLeScanner.startScan(scanCallback)
         // 12 秒后没找到就停止
-        statusTv.postDelayed({ stopScan() }, 12000)
+        statusChip.postDelayed({
+            if (gatt == null) {
+                stopScan()
+                setConnectionState(ConnectionState.DISCONNECTED, "未找到设备,点击重试")
+            }
+        }, 12000)
     }
 
     @SuppressLint("MissingPermission")
@@ -205,21 +379,21 @@ class MainActivity : ComponentActivity() {
         override fun onConnectionStateChange(g: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
-                    runOnUiThread { statusTv.text = "已连接,发现服务..." }
+                    setConnectionState(ConnectionState.CONNECTING, "已连接,发现服务...")
                     g.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    runOnUiThread { statusTv.text = "连接断开" }
+                    setConnectionState(ConnectionState.DISCONNECTED, "连接断开,点击重试")
                 }
             }
         }
 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             if (status != BluetoothGatt.GATT_SUCCESS) {
-                runOnUiThread { statusTv.text = "服务发现失败" }
+                setConnectionState(ConnectionState.ERROR, "服务发现失败")
                 return
             }
-            runOnUiThread { statusTv.text = "已连接,可读取/写入" }
+            setConnectionState(ConnectionState.CONNECTED, "已连接")
             readAll()
         }
 
@@ -239,8 +413,10 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, chr: BluetoothGattCharacteristic, status: Int) {
-            runOnUiThread {
-                statusTv.text = "写入 ${chr.uuid} ${if (status == BluetoothGatt.GATT_SUCCESS) "成功" else "失败"}"
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                setConnectionState(ConnectionState.CONNECTED, "写入成功")
+            } else {
+                setConnectionState(ConnectionState.ERROR, "写入失败")
             }
             writeNext()  // 写完一个,继续下一个
         }
@@ -250,7 +426,7 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     private fun readAll() {
         val g = gatt ?: return
-        val svc = g.getService(SVC) ?: run { statusTv.text = "未找到服务"; return }
+        val svc = g.getService(SVC) ?: run { setConnectionState(ConnectionState.ERROR, "未找到服务"); return }
         val wanted = listOf(CHR_NAME, CHR_TOP, CHR_TITLE, CHR_STATUS)
         readQueue.clear()
         readQueue.addAll(svc.characteristics.filter { it.uuid in wanted })
@@ -266,8 +442,12 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun writeAll() {
-        val g = gatt ?: run { statusTv.text = "未连接"; return }
-        val svc = g.getService(SVC) ?: run { statusTv.text = "未找到服务"; return }
+        val g = gatt ?: run {
+            setConnectionState(ConnectionState.ERROR, "未连接"); return
+        }
+        val svc = g.getService(SVC) ?: run {
+            setConnectionState(ConnectionState.ERROR, "未找到服务"); return
+        }
         writeQueue.clear()
         val fields = mapOf(
             CHR_NAME to nameEt.text.toString(),
@@ -284,7 +464,10 @@ class MainActivity : ComponentActivity() {
     @SuppressLint("MissingPermission")
     private fun writeNext() {
         val g = gatt ?: return
-        val item = writeQueue.removeFirstOrNull() ?: run { statusTv.text = "写入完成"; return }
+        val item = writeQueue.removeFirstOrNull() ?: run {
+            setConnectionState(ConnectionState.CONNECTED, "写入完成")
+            return
+        }
         g.writeCharacteristic(item.first, item.second.toByteArray(Charsets.UTF_8),
             BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
     }

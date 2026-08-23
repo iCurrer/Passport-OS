@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调:深邃蓝紫 -->
+    <color name="primary">#FF6C5CE7</color>
+    <color name="primary_dark">#FF4A3DB5</color>
+    <color name="primary_container">#FFE8E0FF</color>
+    <color name="on_primary">#FFFFFFFF</color>
+    <color name="on_primary_container">#FF1F0A5E</color>
+
+    <!-- 次要色:暖琥珀 -->
+    <color name="secondary">#FFFFB23E</color>
+    <color name="secondary_container">#FFFFEAD0</color>
+    <color name="on_secondary">#FF2D1800</color>
+    <color name="on_secondary_container">#FF3F2400</color>
+
+    <!-- 表面/背景 -->
+    <color name="surface">#FFFBF8FF</color>
+    <color name="surface_variant">#FFE6E0EC</color>
+    <color name="on_surface">#FF1C1B1F</color>
+    <color name="on_surface_variant">#FF49454F</color>
+    <color name="background">#FFFBF8FF</color>
+    <color name="outline">#FF79747E</color>
+
+    <!-- 状态色 -->
+    <color name="status_connected">#FF2E7D32</color>
+    <color name="status_scanning">#FF1565C0</color>
+    <color name="status_disconnected">#FF757575</color>
+    <color name="status_error">#FFC62828</color>
+
+    <!-- 卡片背景 -->
+    <color name="card_background">#FFFFFFFF</color>
+</resources>

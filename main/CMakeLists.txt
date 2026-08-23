@@ -1,10 +1,16 @@
 idf_component_register(
     SRCS "main.c"
-         "badge.c"
-         "ble.c"
-         "badge_font_gb2312.c"
-         "badge_font_gb2312_small.c"
-         "badge_avatar.c"
+         "badge/badge.c"
+         "badge/badge_data.c"
+         "badge/badge_power.c"
+         "badge/badge_ui.c"
+         "transport/ble.c"
+         "assets/badge_font_gb2312.c"
+         "assets/badge_font_gb2312_small.c"
+         "assets/badge_avatar.c"
     INCLUDE_DIRS "."
-    REQUIRES bsp esp_timer nvs_flash bt
+         "badge"
+         "transport"
+         "assets"
+    REQUIRES bsp ui esp_timer nvs_flash bt
 )

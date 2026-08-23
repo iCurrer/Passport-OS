@@ -4,7 +4,7 @@
 
 为 **FoloToy AI Passport** 开发的固件，把 240×320 屏幕变成一块**磨砂黑电子名牌**。上电即显示一块干净的个人名牌——姓名、职位、状态、电量，采用克制、高对比的布局；可通过蓝牙在不重新烧录的情况下改字；3 分钟无操作自动深度睡眠省电，任意键唤醒。
 
-本仓库是一个可运行、经过硬件验证的基线。板级驱动放在 `components/bsp` 中、以稳定 API 暴露；名牌应用放在 `main`。完整硬件上下文与排障知识见 [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md)。
+本仓库是一个可运行、经过硬件验证的基线。固件采用清晰的**三层架构**：硬件抽象（`components/bsp`）、可复用 UI 原语（`components/ui`）、应用逻辑（`main/badge/`）。完整硬件上下文与排障知识见 [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md)。
 
 ## 特性
 
@@ -104,11 +104,56 @@ idf.py -p COM5 monitor
 ## 项目结构
 
 ```text
-components/bsp/include/  BSP 公开 API 与 bsp_pins.h 硬件事实
-components/bsp/src/      显示、按键、音频、电池、共享 I2C 实现
-main/                    名牌应用(main.c、badge.c、ble.c、字体、头像)
-docs/                    agent 硬件开发指南
-sdkconfig.defaults       ESP32-C3、USB console、Flash、LVGL 默认配置
-partitions.csv           自定义 4 MB app 分区
-AGENTS.md                编码、验证与贡献规则
+components/bsp/                  硬件抽象层（BSP）
+├── include/bsp_pins.h            引脚、地址、面板参数单一事实来源
+├── include/bsp_display.h         显示与 LVGL 端口 API
+├── include/bsp_button.h          ADC 三按键 API
+├── include/bsp_audio.h           ES8311 音频编解码 API
+├── include/bsp_battery.h         CW2017 电量计 API
+├── include/bsp_i2c.h             共享 I2C0 总线 API
+└── src/                          驱动实现
+
+components/ui/                    可复用 UI 原语库（跨应用共享）
+├── include/ui_pixel.h            ui_block()、ui_label() —— 纯 LVGL 构建块
+└── src/ui_pixel.c
+
+main/                             应用层
+├── main.c                        入口：初始化硬件 → badge_enter()
+├── badge/                        名牌应用（模块化、分层）
+│   ├── badge.h                   公开 API：badge_enter、badge_key、badge_update_text、badge_get_text
+│   ├── badge.c                   门面：编排数据、电源、UI 子模块
+│   ├── badge_data.h / .c          数据模型：基于 NVS 的字段存储（姓名/顶部/职位/状态）
+│   ├── badge_power.h / .c         电源管理：自动深睡定时器、按键唤醒
+│   └── badge_ui.h / .c            LVGL 布局：屏幕构建、dock 切换、字段刷新
+├── transport/                     通信层
+│   └── ble.h / .c                 NimBLE GATT 服务（广播 + 读写特性）
+├── assets/                        静态资源
+│   ├── badge_fonts.h              字体声明
+│   ├── badge_font_gb2312.c        24px 中文字库（GB2312）
+│   ├── badge_font_gb2312_small.c  14px 中文字库（GB2312）
+│   └── badge_avatar.h / .c        像素头像图像数据
+└── CMakeLists.txt                 构建：源文件、头文件目录、组件依赖
+
+sdkconfig.defaults                 ESP32-C3、USB console、Flash、LVGL 默认配置
+partitions.csv                     自定义 4 MB app 分区
+AGENTS.md                          编码、验证与贡献规则
+docs/                              AI 硬件开发指南
 ```
+
+### 架构与依赖方向
+
+```
+┌──────────────────────────────────────────────────────┐
+│                     应用层                            │
+│  main.c ──► badge/ （门面 → 数据、电源、UI）          │
+│              transport/ble.c （NimBLE GATT）          │
+├──────────────────────────────────────────────────────┤
+│                   UI 组件库                           │
+│  components/ui/ （ui_block、ui_label —— 纯 LVGL）    │
+├──────────────────────────────────────────────────────┤
+│                   硬件抽象层                           │
+│  components/bsp/ （显示、按键、音频、电池、I2C）      │
+└──────────────────────────────────────────────────────┘
+```
+
+依赖方向：`main → ui → bsp`。`ui` 层是纯 LVGL，对硬件一无所知。`badge` 子模块按职责拆分：`data`（NVS 存储）、`power`（休眠定时器）、`ui`（LVGL 布局）—— 全部由 `badge.c` 门面协调。新应用可直接复用 `components/ui` 绘制，无需重复实现像素原语。

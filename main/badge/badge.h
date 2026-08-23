@@ -1,6 +1,10 @@
-// main/badge.h —— 磨砂黑「心情电子名牌」界面。
+// main/badge/badge.h —— 磨砂绿「心情电子名牌」应用门面(对外 API)。
 // 开机直入本界面:顶部导航栏 + 左侧形象 + 右侧姓名/职位/状态 + 底部 dock。
 // 姓名/顶部文字/职位/状态均存 NVS,可通过 BLE 自定义(见 badge_update_text)。
+//
+// 本模块是应用层门面:对外只暴露 4 个接口,内部拆分为
+//   badge_data(字段+NVS) / badge_power(深睡+计时) / badge_ui(LVGL 布局)。
+// 依赖方向 badge -> {ui,power,data}、ui/power -> data,单向无环。
 #pragma once
 
 #include "bsp_button.h"

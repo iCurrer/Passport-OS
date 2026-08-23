@@ -10,7 +10,10 @@ AI 应先完成以下检查：
 
 1. 阅读 `AGENTS.md`、本文件、`README.md` 和将要修改的 BSP 头文件/实现。
 2. 执行 `git status --short`，保留用户已有改动，不覆盖、不清理无关文件。
-3. 判断修改属于哪一层：可复用硬件能力放入 `components/bsp`；菜单、动画、业务交互和验证页面放入 `main`。
+3. 判断修改属于哪一层：
+   - **硬件抽象层（`components/bsp`）**：可复用硬件驱动，硬件常量放 `bsp_pins.h`。
+   - **UI 组件库（`components/ui`）**：纯 LVGL 绘制原语，与硬件无关，跨应用共享。
+   - **应用层（`main`）**：业务逻辑、界面布局、通信协议。子模块按职责拆分至 `badge/`（数据/电源/UI）、`transport/`（BLE）、`assets/`（静态资源）。
 4. 以 `bsp_pins.h` 为当前板卡引脚和面板参数的单一事实来源，不在 `.c` 文件重复写 GPIO、I2C 地址或屏幕尺寸。
 5. 不确定板卡版本、极性、芯片寄存器或接线时，明确标注“未知/待实测”，不要把常见开发板参数当成本板事实。
 
@@ -57,30 +60,68 @@ LCD RST 和功放 PA 使能均定义为 `-1`：LCD 复位脚未接 MCU，驱动�
 
 ## 4. 软件架构与启动流程
 
-```text
-app_main
-  ├─ bsp_i2c_init → bsp_i2c_scan
-  ├─ bsp_display_init → bsp_lvgl_init → backlight 100%
-  ├─ bsp_button_init(on_key)
-  ├─ bsp_audio_init
-  ├─ bsp_battery_init
-  └─ LVGL menu
-       ├─ Display demo
-       ├─ Button demo
-       ├─ Audio demo
-       └─ Battery demo
+固件采用**三层分层架构**，依赖方向为 `main → ui → bsp`（单向无环）：
+
+```
+┌──────────────────────────────────────────────────────┐
+│                   应用层 (main/)                       │
+│  main.c ──► badge/ (门面 → data, power, ui)          │
+│              transport/ble.c (NimBLE GATT)            │
+├──────────────────────────────────────────────────────┤
+│                  UI 组件库 (components/ui/)            │
+│  ui_block(), ui_label() — 纯 LVGL, 与硬件无关         │
+├──────────────────────────────────────────────────────┤
+│              硬件抽象层 (components/bsp/)              │
+│  display, button, audio, battery, i2c                │
+└──────────────────────────────────────────────────────┘
 ```
 
-显示是 UI 的硬依赖，显示或 LVGL 初始化失败时 `app_main` 直接返回。按键、音频、电池是软依赖：初始化失败的菜单项显示 `[FAIL]`，其他页面仍可用。
+### 4.1 启动流程
+
+```text
+app_main
+  ├─ bsp_i2c_init
+  ├─ bsp_display_init → bsp_lvgl_init → backlight 70%
+  ├─ bsp_battery_init (软依赖, 失败不阻塞)
+  ├─ bsp_button_init(on_key) (软依赖, 失败不阻塞)
+  ├─ ble_init (NimBLE GATT 服务 + 广播)
+  └─ badge_enter() (LVGL 锁内)
+       ├─ badge_power_init()   (计时 + 自动关机定时器)
+       ├─ badge_data_init()    (NVS 载入四个字段)
+       └─ badge_ui_init()      (构建 screen 并加载)
+```
+
+显示是 UI 的硬依赖，显示或 LVGL 初始化失败时 `app_main` 直接返回。按键、电池、BLE 是软依赖：初始化失败时仅记录日志，不影响名牌界面启动。
+
+### 4.2 公开 BSP API
 
 公开 BSP API 位于 `components/bsp/include/`：
 
 - `bsp_i2c.h`：共享总线初始化、句柄和扫描。
-- `bsp_display.h`：LCD、背光以及可选 LVGL 接入。
+- `bsp_display.h`：LCD、背光以及 LVGL 端口接入。
 - `bsp_button.h`：三键事件与校准电压读取。
 - `bsp_audio.h`：codec 初始化、格式、阻塞式 PCM 收发和音量。
 - `bsp_battery.h`：SOC 与电压。
 - `bsp_pins.h`：硬件常量，不承载业务逻辑。
+
+### 4.3 公开 UI 组件 API
+
+UI 组件库位于 `components/ui/include/`：
+
+- `ui_pixel.h`：`ui_block()` 创建纯色矩形块，`ui_label()` 创建带字体与颜色的标签。纯 LVGL 原语，与硬件无关，供所有应用页面复用。
+
+### 4.4 应用层模块划分
+
+名牌应用（`main/badge/`）按职责拆分为四个模块：
+
+| 模块 | 文件 | 职责 |
+| --- | --- | --- |
+| 门面 | `badge.h` / `badge.c` | 对外 API（`badge_enter`、`badge_key`、`badge_update_text`、`badge_get_text`），编排子模块 |
+| 数据 | `badge_data.h` / `badge_data.c` | NVS 读写、字段内存缓冲（name / top / title / status） |
+| 电源 | `badge_power.h` / `badge_power.c` | 3 分钟自动深度睡眠、按键唤醒、开机忽略期 |
+| UI | `badge_ui.h` / `badge_ui.c` | LVGL 布局构建、dock 切换、字段刷新，调用 `components/ui` 原语 |
+
+依赖方向：`badge.c → {badge_data, badge_power, badge_ui}`，`badge_ui / badge_power → badge_data`，单向无环。
 
 驱动初始化大多设计为幂等，但当前没有统一 deinit API。不要假设可以在运行时反复销毁和重建总线/驱动。
 
@@ -138,7 +179,7 @@ LVGL 非线程安全：
 - ADC 衰减为 `ADC_ATTEN_DB_12`，必须与依赖的 button 组件内部配置保持一致。升级组件后要重新核对。
 - ADC 校准句柄创建失败不影响按键事件，但 `bsp_button_read_mv()` 返回 `-1`。
 - 回调来自 button 组件的定时器任务，不能阻塞、录音、播放或直接做重 UI 操作。
-- 事件包括 PRESS、CLICK、DOUBLE、LONG。应用菜单主要消费 CLICK；页面中的 OK LONG 被全局拦截用于返回。
+- 事件包括 PRESS、CLICK、DOUBLE、LONG。应用主要消费 CLICK；OK 长按用于开关机。
 
 重标阈值时，在 Button 页逐个长按按键记录稳定电压，采集多块板、不同电量和合理温度范围的数据，再把相邻分布之间留裕量设置为边界。不要只用理论分压值。
 
@@ -179,9 +220,9 @@ MCU 是 I2S master，ES8311 是 slave；I2S0 的 TX/RX 全双工通道共享 MCL
 - `bsp_audio_read/write` 是阻塞调用，不能放在按键回调或 LVGL 任务中。
 - I2S DMA 当前为 6 个 descriptor、每个 240 frame。更改 DMA 或 LVGL buffer 前必须联合评估内部 RAM。
 
-Audio demo 使用独立 4 KB 栈任务：OK 播放 1 秒 1 kHz 方波，UP 录 3 秒再回放。录音缓冲约 96 KB，是当前最显著的瞬时堆分配，可能因碎片或其他功能增大而失败。新增长录音应优先采用分块流式处理或外部存储，不可假设存在 PSRAM。
+如需验证音频，可创建独立的测试任务：使用独立 4 KB 栈，OK 播放 1 秒 1 kHz 方波，UP 录 3 秒再回放。录音缓冲约 96 KB，是当前最显著的瞬时堆分配，可能因碎片或其他功能增大而失败。新增长录音应优先采用分块流式处理或外部存储，不可假设存在 PSRAM。
 
-当前 demo 的退出会直接删除音频任务。如果任务正阻塞于 codec 读写，实际硬件上需特别验证退出行为；若扩展为生产逻辑，应设计可取消的分块循环与明确的任务退出握手。
+当前音频测试退出时会直接删除音频任务。如果任务正阻塞于 codec 读写，实际硬件上需特别验证退出行为；若扩展为生产逻辑，应设计可取消的分块循环与明确的任务退出握手。
 
 ## 9. CW2017 电池计
 
@@ -190,7 +231,7 @@ CW2017 在共享 I2C 地址 0x63。初始化读取 VERSION 确认在线，将 CO
 - SOC：读 0x04–0x05，仅返回高字节整数百分比；大于 100 视为未就绪并返回 `-1`。
 - 电压：读 0x02–0x03 的 14 bit 值，换算为 `raw × 312.5 µV`，API 返回 mV。
 - 事务超时当前为 100 ms，设备时钟为 100 kHz。
-- 芯片不应答时初始化返回 `ESP_ERR_NOT_FOUND`，菜单标记失败，但整机继续运行。
+- 芯片不应答时初始化返回 `ESP_ERR_NOT_FOUND`，名牌界面正常显示但电量降级为 `--%`，整机继续运行。
 
 SOC 准确度取决于电芯与 profile 的匹配程度。本驱动给出的是电量计读数，不等于实验室标定结果。若产品需要准确 SOC，必须取得电芯参数、CW2017 数据手册和供应商 profile，并完成完整充放电验证。
 
@@ -205,14 +246,16 @@ FoloToy AI Passport 的所有硬件批次均使用 8 MB Flash，`sdkconfig.defau
 - LVGL 静态内存池 24 KB；
 - LCD DMA buffer 约 9.6 KB；
 - I2S DMA descriptor/frame buffer；
-- Audio demo 96 KB 录音堆；
+- 音频测试缓冲约 96 KB 堆；
 - 各 FreeRTOS 任务栈和最大连续空闲块。
 
 新增图片、字体、网络栈、TLS、音频缓存或双缓冲时，应记录 build 后的静态 RAM/Flash 使用，并在运行时记录 free heap 与 largest free block。总 free heap 足够不代表能成功分配大连续缓冲。
 
 ## 11. 新功能的正确落点
 
-新增可复用硬件驱动：
+新增功能时，根据其性质放入正确的层：
+
+### 11.1 新增可复用硬件驱动（BSP 层）
 
 1. 在 `components/bsp/include/` 添加 `bsp_<feature>.h`，API 使用 `bsp_` 前缀。
 2. 在 `components/bsp/src/` 实现，硬件常量放 `bsp_pins.h`。
@@ -220,16 +263,34 @@ FoloToy AI Passport 的所有硬件批次均使用 8 MB Flash，`sdkconfig.defau
 4. 初始化应尽量幂等，错误应返回 `esp_err_t` 并输出包含引脚/地址的诊断日志。
 5. 明确 API 的线程、阻塞、内存所有权、任务上下文和失败返回值。
 
-新增硬件验证页：
+### 11.2 新增 UI 绘制原语（UI 组件库）
 
-1. 创建 `main/demo_<feature>.c`，实现 `enter`、`exit`、`key`。
-2. 在 `main/demo.h` 声明，在 `main/CMakeLists.txt` 加源文件，在 `main.c` 的 `DEMOS[]` 注册。
-3. `enter` 创建并加载自己的 screen；`exit` 先停任务/定时器，再删 screen 和清空指针。
+1. 在 `components/ui/include/` 声明新函数，在 `components/ui/src/` 实现。
+2. 原语必须与硬件无关 —— 只依赖 LVGL API，不引入 BSP 头文件。
+3. 纯 UI 逻辑（如创建矩形、标签、线条、图标），不含业务决策。
+4. 更新 `components/ui/CMakeLists.txt` 的 SRCS。
+5. 所有应用页面（badge、未来新页面）均可通过 `#include "ui_pixel.h"` 复用，避免重复代码。
+
+### 11.3 新增应用页面或功能（应用层）
+
+1. 如果新增的是**独立页面**（如设置页、信息页），在 `main/` 下创建新目录，实现 `enter`/`exit`/`key` 接口。
+2. 页面布局调用 `components/ui` 的原语（`ui_block`、`ui_label`），不要重复实现 block/label 逻辑。
+3. 在 `main/CMakeLists.txt` 添加源文件、头文件目录和所需组件依赖。
 4. 页面文字保持英文；说明性注释可用中文。
-5. 慢操作放工作任务，结果通过 LVGL 锁更新界面。
-6. 保留 OK 长按返回这一全局交互，不在页面重复实现。
+5. 慢操作（如网络请求）放工作任务，结果通过 LVGL 锁更新界面。
+6. `enter` 创建并加载自己的 screen；`exit` 先停任务/定时器，再删 screen 和清空指针。
+7. 页面退出时先停止可能访问页面对象的定时器/任务，再删除 screen，并将静态对象指针置空。
 
-如果菜单项依赖新外设，还需扩展 `s_ok[]` 初始化与失败禁用逻辑。注意当前数组索引与 `DEMOS[]` 顺序隐式对应，修改顺序时必须同步核对。
+### 11.4 新增通信协议
+
+1. 在 `main/transport/` 下创建新文件（如 `wifi.c`、`mqtt.c`）。
+2. 提供简洁的 `init`/`deinit` 接口，内部管理任务和连接。
+3. 更新 `main/CMakeLists.txt` 的 SRCS 和 REQUIRES。
+
+### 11.5 新增静态资源
+
+1. 字体、图片、图标等放入 `main/assets/`。
+2. 更新 `main/CMakeLists.txt` 的 SRCS 和 INCLUDE_DIRS。
 
 ## 12. 开发环境搭建
 
@@ -358,14 +419,14 @@ idf.py build
 | 能烧录但无日志 | 确认 USB Serial/JTAG 配置和正确端口，不要默认改用 GPIO21 UART TX |
 | 构建目录来自其他 IDF | 激活 5.5.3 后 `idf.py fullclean`，再 set-target/build |
 
-环境验收标准是：`idf.py --version` 正确、`idf.py build` 无错误、设备可烧录、monitor 能看到 `FoloToy AI Passport BSP demo 启动`，并且启动后没有持续重启或 assert。
+环境验收标准是：`idf.py --version` 正确、`idf.py build` 无错误、设备可烧录、monitor 能看到 `FoloToy AI Passport badge 启动`，并且启动后没有持续重启或 assert。
 
 ## 13. 构建与验证
 
 推荐环境：
 
 ```bash
-get_idf553
+# 进入 ESP-IDF 环境 (source export.sh 或等效命令)
 idf.py set-target esp32c3   # 新 checkout 或目标变化时
 idf.py build
 idf.py flash monitor
@@ -379,9 +440,9 @@ idf.py flash monitor
 
 - USB Serial/JTAG 有稳定启动日志，无重启循环、assert、watchdog 和持续错误。
 - I2C 扫描看到预期的 0x18；装有 CW2017 的板还应看到 0x63。
-- 菜单可用 UP/DOWN 循环导航，OK 单击进入，OK 长按返回。
-- 某个可选外设故障只禁用对应页面，不影响其他功能。
-- 连续切换页面和反复操作后无堆持续下降、对象悬挂或任务泄漏。
+- 名牌界面正常显示，`UP`/`DOWN` 切换 dock，BLE 可读写。
+- 某个可选外设故障只影响对应功能（如电量降级），不影响整体运行。
+- 连续操作后无堆持续下降、对象悬挂或任务泄漏。
 
 ### 按修改类型追加验收
 

@@ -4,7 +4,7 @@
 
 Firmware for the **FoloToy AI Passport** that turns the 240×320 display into a **matte-black digital name badge**. On power-up it shows a clean personal badge — name, title, status, and battery — in a restrained, high-contrast layout, and it can be re-customized over Bluetooth without re-flashing. To save power it deep-sleeps automatically after 3 minutes of inactivity and wakes on any button press.
 
-This repo is a running, hardware-validated baseline. Board-level drivers live in `components/bsp` behind stable APIs; the badge application lives in `main`. See [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md) for the full hardware context and troubleshooting knowledge.
+This repo is a running, hardware-validated baseline. The firmware follows a clean **three-layer architecture**: hardware abstraction (`components/bsp`), reusable UI primitives (`components/ui`), and application logic (`main/badge/`). See [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md) for the full hardware context and troubleshooting knowledge.
 
 ## Features
 
@@ -76,7 +76,7 @@ All pins, addresses, panel parameters, and button voltage windows live only in [
 ## Chinese font note
 
 - Name uses the 24 px full Chinese font; title/status/top bar use the 14 px full Chinese font.
-- The fonts (`main/badge_font_gb2312.c`, `main/badge_font_gb2312_small.c`) are generated for **LVGL 9.5** with `lv_font_conv` and cover **GB2312 (6763 common chars) + ASCII `0x20-0x7E`**. Fields written via BLE that use characters outside this set will render as missing glyphs.
+- The fonts (`main/assets/badge_font_gb2312.c`, `main/assets/badge_font_gb2312_small.c`) are generated for **LVGL 9.5** with `lv_font_conv` and cover **GB2312 (6763 common chars) + ASCII `0x20-0x7E`**. Fields written via BLE that use characters outside this set will render as missing glyphs.
 - ⚠️ LVGL 8 vs 9.5 changed `lv_font_t.bitmap_format` meaning; a font generated for LVGL 8 will show **all text blank** (layout/images/sound still fine). Regenerate with the matching `lv_font_conv` (`scripts/gen_badge_fonts.py`) and confirm `bitmap_format=1` (`COMPRESSED`) and that the ASCII range `0x20-0x7E` is included.
 - The original pre-regeneration font source lives in `_font_backup/` (not committed).
 
@@ -106,11 +106,56 @@ Custom partition table (`partitions.csv`) enlarges the app partition to 4 MB to 
 ## Project structure
 
 ```text
-components/bsp/include/  Public BSP APIs + bsp_pins.h hardware facts
-components/bsp/src/      Display, button, audio, battery, shared-I2C implementations
-main/                    Badge app (main.c, badge.c, ble.c, fonts, avatar)
-docs/                    Agent hardware development guide
-sdkconfig.defaults       ESP32-C3, USB console, Flash, LVGL defaults
-partitions.csv           Custom 4 MB app partition
-AGENTS.md                Coding, validation, and contribution rules
+components/bsp/                  Hardware abstraction layer (BSP)
+├── include/bsp_pins.h            Single source of truth for pins, addresses, panel params
+├── include/bsp_display.h         Display & LVGL port API
+├── include/bsp_button.h          ADC three-button API
+├── include/bsp_audio.h           ES8311 codec API
+├── include/bsp_battery.h         CW2017 fuel gauge API
+├── include/bsp_i2c.h             Shared I2C0 bus API
+└── src/                          Driver implementations
+
+components/ui/                    Reusable UI primitive library (shared across apps)
+├── include/ui_pixel.h            ui_block(), ui_label() — pure LVGL building blocks
+└── src/ui_pixel.c
+
+main/                             Application layer
+├── main.c                        Entry point: init hardware → badge_enter()
+├── badge/                        Badge application (modular, layered)
+│   ├── badge.h                   Public API: badge_enter, badge_key, badge_update_text, badge_get_text
+│   ├── badge.c                   Facade: orchestrates data, power, and UI submodules
+│   ├── badge_data.h / .c          Data model: NVS-backed field storage (name/top/title/status)
+│   ├── badge_power.h / .c         Power management: auto deep-sleep timer, wake-on-button
+│   └── badge_ui.h / .c            LVGL layout: screen construction, dock switching, field refresh
+├── transport/                     Communication layer
+│   └── ble.h / .c                 NimBLE GATT service (advertising + read/write characteristics)
+├── assets/                        Static resources
+│   ├── badge_fonts.h              Font declarations
+│   ├── badge_font_gb2312.c        24 px Chinese font (GB2312)
+│   ├── badge_font_gb2312_small.c  14 px Chinese font (GB2312)
+│   └── badge_avatar.h / .c        Pixel avatar image data
+└── CMakeLists.txt                 Build: sources, include dirs, component dependencies
+
+sdkconfig.defaults                 ESP32-C3, USB console, Flash, LVGL defaults
+partitions.csv                     Custom 4 MB app partition
+AGENTS.md                          Coding, validation, and contribution rules
+docs/                              AI hardware development guide
 ```
+
+### Architecture & dependency direction
+
+```
+┌──────────────────────────────────────────────────────┐
+│                  Application Layer                    │
+│  main.c ──► badge/ (facade → data, power, ui)        │
+│              transport/ble.c (NimBLE GATT)            │
+├──────────────────────────────────────────────────────┤
+│                  UI Component Library                 │
+│  components/ui/ (ui_block, ui_label — pure LVGL)     │
+├──────────────────────────────────────────────────────┤
+│              Hardware Abstraction Layer               │
+│  components/bsp/ (display, button, audio, battery, i2c)│
+└──────────────────────────────────────────────────────┘
+```
+
+Dependency direction: `main → ui → bsp`. The `ui` layer is pure LVGL and knows nothing about hardware. The `badge` submodule is split by responsibility: `data` (NVS storage), `power` (sleep timer), and `ui` (LVGL layout) — all coordinated by the `badge.c` facade. New applications can reuse `components/ui` for drawing without duplicating pixel primitives.

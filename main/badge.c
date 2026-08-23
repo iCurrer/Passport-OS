@@ -53,7 +53,7 @@ static const char *TAG = "badge";
 #define LAYOUT_HEAD_LINE    40     // 头部底部分隔线 y
 #define LAYOUT_AVATAR_X     22     // 左侧头像
 #define LAYOUT_AVATAR_Y     80
-#define LAYOUT_INFO_X       122    // 右侧信息列左对齐起点
+#define INFO_CENTER_X       171    // 右侧信息列水平居中的轴(头像右缘102 到屏幕240 的中心)
 #define LAYOUT_NAME_Y       108    // 姓名(主,24px)
 #define LAYOUT_DIV_Y        140    // 姓名下细分隔线(宽度 64)
 #define LAYOUT_TITLE_Y      152    // 职位(次,14px)
@@ -93,6 +93,8 @@ static lv_obj_t *s_brand_lbl;              // 顶部导航栏文字
 static lv_obj_t *s_name_lbl;               // 姓名
 static lv_obj_t *s_title_lbl;              // 职位(豆包大学)
 static lv_obj_t *s_tag_lbl;                // 状态文字(主题色,前置圆点)
+static lv_obj_t *s_div;                    // 姓名下细分隔线(随姓名宽度伸缩)
+static lv_obj_t *s_tag_dot;                // 状态前置圆点
 static lv_obj_t *s_avatar;                 // 左侧自定义像素形象
 static lv_obj_t *s_batt_fill;              // 电量条填充块
 static lv_obj_t *s_batt_txt;               // 电量百分比文字(图标右侧)
@@ -269,6 +271,24 @@ static void dock_draw(void)
     dock_icon(s_dock, 132, 6, s_dock_sel == 1);
 }
 
+// 右侧信息列以 INFO_CENTER_X 为轴水平居中(姓名/下划线/职位/状态),2/3/4字都不偏左不贴右。须持 LVGL 锁。
+static void update_info_position(void)
+{
+    if (!s_name_lbl) return;
+    lv_obj_update_layout(s_name_lbl);
+    int name_w = lv_obj_get_width(s_name_lbl);
+    lv_obj_set_pos(s_name_lbl, INFO_CENTER_X - name_w / 2, LAYOUT_NAME_Y);
+    if (s_div) { lv_obj_set_width(s_div, name_w); lv_obj_set_pos(s_div, INFO_CENTER_X - name_w / 2, LAYOUT_DIV_Y); }
+    if (s_title_lbl) { lv_obj_update_layout(s_title_lbl); int w = lv_obj_get_width(s_title_lbl); lv_obj_set_pos(s_title_lbl, INFO_CENTER_X - w / 2, LAYOUT_TITLE_Y); }
+    if (s_tag_lbl) {
+        lv_obj_update_layout(s_tag_lbl);
+        int w = lv_obj_get_width(s_tag_lbl);
+        int x = INFO_CENTER_X - w / 2;
+        lv_obj_set_pos(s_tag_lbl, x, LAYOUT_STATUS_Y);
+        if (s_tag_dot) lv_obj_set_pos(s_tag_dot, x - 14, LAYOUT_STATUS_DOT_Y);
+    }
+}
+
 void badge_enter(void)
 {
     badge_init();
@@ -296,7 +316,6 @@ void badge_enter(void)
     lv_obj_set_style_text_font(s_batt_txt, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(s_batt_txt, lv_color_hex(TXT_MUTED), 0);
     lv_obj_set_pos(s_batt_txt, 186, 12);
-    blk(s_scr, 0, LAYOUT_HEAD_LINE, 240, 2, LINE_DIV);       // 头部分隔线
 
     // ===================== 主体:左头像 + 右信息 =====================
     // 左侧头像:主视觉,垂直居中对齐信息列。
@@ -304,29 +323,28 @@ void badge_enter(void)
     lv_image_set_src(s_avatar, &badge_avatar);
     lv_obj_set_pos(s_avatar, LAYOUT_AVATAR_X, LAYOUT_AVATAR_Y);
 
-    // 右侧信息列:左对齐。层级 姓名(主)> 职位(次)> 状态(辅)。
+    // 右侧信息列:以 INFO_CENTER_X 为轴水平居中。层级 姓名(主)> 职位(次)> 状态(辅)。
     s_name_lbl = lv_label_create(s_scr);
     lv_obj_set_style_text_font(s_name_lbl, &badge_font_gb2312, 0);
     lv_obj_set_style_text_color(s_name_lbl, lv_color_hex(TXT_PRIMARY), 0);
     lv_label_set_text(s_name_lbl, s_name);
-    lv_obj_set_pos(s_name_lbl, LAYOUT_INFO_X, LAYOUT_NAME_Y);
 
-    // 姓名下细分隔线:把"主"与"次"信息分组,强化层级。
-    blk(s_scr, LAYOUT_INFO_X, LAYOUT_DIV_Y, 64, 2, LINE_DIV);
+    // 姓名下细分隔线:与姓名同宽,随姓名长度自动伸缩。
+    s_div = blk(s_scr, INFO_CENTER_X, LAYOUT_DIV_Y, 1, 2, LINE_DIV);
 
     s_title_lbl = lv_label_create(s_scr);
     lv_obj_set_style_text_font(s_title_lbl, &badge_font_gb2312_small, 0);
     lv_obj_set_style_text_color(s_title_lbl, lv_color_hex(TXT_MUTED), 0);
     lv_label_set_text(s_title_lbl, s_title);
-    lv_obj_set_pos(s_title_lbl, LAYOUT_INFO_X, LAYOUT_TITLE_Y);
 
     // 状态:前置主题色圆点指示 + 主题色文字(辅)。
-    blk(s_scr, LAYOUT_INFO_X, LAYOUT_STATUS_DOT_Y, 6, 6, ACCENT);
+    s_tag_dot = blk(s_scr, INFO_CENTER_X, LAYOUT_STATUS_DOT_Y, 6, 6, ACCENT);
     s_tag_lbl = lv_label_create(s_scr);
     lv_obj_set_style_text_font(s_tag_lbl, &badge_font_gb2312_small, 0);
     lv_obj_set_style_text_color(s_tag_lbl, lv_color_hex(ACCENT), 0);
     lv_label_set_text(s_tag_lbl, s_status);
-    lv_obj_set_pos(s_tag_lbl, LAYOUT_INFO_X + 14, LAYOUT_STATUS_Y);
+
+    update_info_position();   // 统一居中排版(姓名/下划线/职位/状态)
 
     // ===================== 底部 dock 功能区 =====================
     blk(s_scr, 0, LAYOUT_DOCK_LINE, 240, 2, LINE_DIV);       // dock 顶部分隔线
@@ -413,6 +431,8 @@ void badge_update_text(badge_field_t field, const char *s)
         case BADGE_FIELD_STATUS: if (s_tag_lbl)   lv_label_set_text(s_tag_lbl, buf);   break;
         default: break;
         }
+        if (field == BADGE_FIELD_NAME || field == BADGE_FIELD_TITLE || field == BADGE_FIELD_STATUS)
+            update_info_position();   // 文字宽度变化后重排居中
     }
     bsp_lvgl_unlock();
 }

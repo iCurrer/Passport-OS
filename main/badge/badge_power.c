@@ -12,22 +12,26 @@
 #include "esp_system.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_log.h"
 
 static const char *TAG = "badge_power";
 
-#define AUTO_OFF_MS    (7u * 60u * 1000u)   // 7 分钟无操作自动深度睡眠
-#define BOOT_IGNORE_US (800u * 1000u)       // 开机前忽略按键,防唤醒键误触
+#define DEFAULT_TIMEOUT_S  (7u * 60u)          // 默认 7 分钟
+#define BOOT_IGNORE_US     (800u * 1000u)       // 开机前忽略按键,防唤醒键误触
+#define NVS_KEY_TIMEOUT    "sleep_to"
 
 static esp_timer_handle_t s_auto_timer;
 static int64_t s_boot_us;                    // 开机时间
 static int64_t s_last_activity_us;           // 最近一次按键时间
+static uint32_t s_timeout_s = DEFAULT_TIMEOUT_S;  // 当前超时秒数
 
 // 进入深度睡眠:提交 NVS、关屏、配置 GPIO0 低电平唤醒。不复返。
 static void enter_deep_sleep(void)
 {
     badge_data_commit();
-    ESP_LOGI(TAG, "进入深度睡眠(7分钟无操作自动,任意键唤醒)");
+    ESP_LOGI(TAG, "进入深度睡眠(%lu秒无操作)", (unsigned long)s_timeout_s);
     bsp_display_backlight(0);
 
     // 关闭 LCD 面板显示,降低深睡时面板静态漏电
@@ -53,8 +57,9 @@ static void enter_deep_sleep(void)
 static void auto_off_cb(void *arg)
 {
     (void)arg;
+    if (s_timeout_s == 0) return;   // 永不自动休眠
     int64_t now = esp_timer_get_time();
-    if (now - s_last_activity_us >= (int64_t)AUTO_OFF_MS * 1000) {
+    if (now - s_last_activity_us >= (int64_t)s_timeout_s * 1000000) {
         enter_deep_sleep();
     }
 }
@@ -62,6 +67,18 @@ static void auto_off_cb(void *arg)
 void badge_power_init(void)
 {
     if (s_auto_timer) return;
+
+    // 从 NVS 读取上次设置的休眠超时
+    nvs_handle_t nvs;
+    if (nvs_open("badge_cfg", NVS_READONLY, &nvs) == ESP_OK) {
+        uint32_t v = 0;
+        if (nvs_get_u32(nvs, NVS_KEY_TIMEOUT, &v) == ESP_OK) {
+            s_timeout_s = v;
+        }
+        nvs_close(nvs);
+    }
+    ESP_LOGI(TAG, "休眠超时=%lu秒%s", (unsigned long)s_timeout_s,
+             s_timeout_s == 0 ? "(永不)" : "");
 
     // 诊断:确认上次是深度睡眠唤醒,以及唤醒源(排查"自动休眠后又亮起")
     esp_reset_reason_t reason = esp_reset_reason();
@@ -93,4 +110,21 @@ bool badge_power_key_activity(void)
 void badge_power_activity(void)
 {
     s_last_activity_us = esp_timer_get_time();
+}
+
+void badge_power_set_timeout(uint32_t seconds)
+{
+    s_timeout_s = seconds;
+    nvs_handle_t nvs;
+    if (nvs_open("badge_cfg", NVS_READWRITE, &nvs) == ESP_OK) {
+        nvs_set_u32(nvs, NVS_KEY_TIMEOUT, seconds);
+        nvs_commit(nvs);
+        nvs_close(nvs);
+    }
+    ESP_LOGI(TAG, "休眠超时已设为 %lu秒", (unsigned long)seconds);
+}
+
+uint32_t badge_power_get_timeout(void)
+{
+    return s_timeout_s;
 }

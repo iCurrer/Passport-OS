@@ -8,6 +8,7 @@
 #include "bsp_battery.h"
 #include "badge.h"
 #include "ble.h"
+#include "nvs_flash.h"
 #include "lvgl.h"
 #include "esp_log.h"
 
@@ -23,6 +24,13 @@ static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user)
 void app_main(void)
 {
     ESP_LOGI(TAG, "FoloToy AI Passport badge 启动");
+
+    // NVS 必须先初始化:BLE 开关/休眠超时等配置在 ble_init 与 badge_power 里读取。
+    esp_err_t nvs_err = nvs_flash_init();
+    if (nvs_err == ESP_ERR_NVS_NO_FREE_PAGES || nvs_err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
 
     bsp_i2c_init();
 

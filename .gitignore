@@ -1,4 +1,5 @@
 build/
+build_run.log
 sdkconfig
 sdkconfig.old
 managed_components/

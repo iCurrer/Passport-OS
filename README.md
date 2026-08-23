@@ -2,17 +2,19 @@
 
 [简体中文](README.zh_CN.md) | English
 
-Firmware for the **FoloToy AI Passport** that turns the 240×320 display into a **matte-black digital name badge**. On power-up it shows a clean personal badge — name, title, status, and battery — in a restrained, high-contrast layout, and it can be re-customized over Bluetooth without re-flashing. To save power it deep-sleeps automatically after 3 minutes of inactivity and wakes on any button press.
+Firmware for the **FoloToy AI Passport** that turns the 240×320 display into a **matte-black digital name badge**. On power-up it shows a clean personal badge — name, title, status, and battery — in a restrained, high-contrast layout, and it can be re-customized over Bluetooth without re-flashing. A bottom dock launches a built-in **pixel game** and a **settings page** (sleep timer, Bluetooth on/off, firmware version). To save power it auto deep-sleeps after a configurable idle timeout (default 7 minutes) and wakes on any button press.
 
-This repo is a running, hardware-validated baseline. The firmware follows a clean **three-layer architecture**: hardware abstraction (`components/bsp`), reusable UI primitives (`components/ui`), and application logic (`main/badge/`). See [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md) for the full hardware context and troubleshooting knowledge.
+This repo is a running, hardware-validated baseline. The firmware follows a clean **three-layer architecture**: hardware abstraction (`components/bsp`), reusable UI primitives (`components/ui`), and application logic (`main/` — `badge/`, `game/`, `settings/`, `transport/`, `assets/`). See [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md) for the full hardware context and troubleshooting knowledge.
 
 ## Features
 
-- **Matte-black badge UI** with a clear information hierarchy: a large name (24 px, white) as the primary element, smaller title/status (14 px) as secondary, and a single accent color (`0x5B8DEF` soft blue) used sparingly for the status dot and dock selection.
-- **Three-button interaction** — `UP`/`DOWN` navigate the bottom dock; `OK` is reserved.
+- **Matte-black badge UI** with a clear information hierarchy: a large name (24 px, white) as the primary element, smaller title/status (14 px) as secondary, and a single accent color (`0x4CD964` green) used sparingly for the status dot and dock selection.
+- **Three-button interaction** — `UP`/`DOWN` navigate the bottom dock; `OK` (short) opens the selected page, `OK` (long) returns to the badge.
+- **Pixel game** — a "catch the gems, dodge the bombs" minigame in the dock; `UP`/`DOWN` move the basket, difficulty ramps up as the score climbs.
+- **Settings page** — sleep timeout (30 s / 1 / 2 / 5 min / never), Bluetooth on/off (persisted to NVS), and firmware version.
 - **BLE customization (NimBLE)** — a phone app can change the name / top bar / title / status live via GATT, no re-flash needed.
-- **NVS persistence** — all four customizable fields survive power loss.
-- **Deep-sleep power saving** — auto deep-sleep after 3 minutes of no activity, wake on any button press (GPIO0 low-level wake).
+- **NVS persistence** — all four customizable fields, the sleep timeout, and the Bluetooth state survive power loss.
+- **Deep-sleep power saving** — auto deep-sleep after a configurable idle timeout (default 7 min), wake on any button press (GPIO0 low-level wake).
 - **Battery display** — CW2017 state-of-charge, turns orange below 20% and red below 10%; degrades to `--%` when the fuel gauge is absent.
 
 ## On-screen layout
@@ -35,15 +37,25 @@ This repo is a running, hardware-validated baseline. The firmware follows a clea
 
 - Header: brand (left) + battery bar and percent (right), thin divider below.
 - Body: pixel avatar on the left, vertically centered against an information column on the right — all left-aligned on one reference line.
-- Bottom dock: two placeholder tabs; the selected one gets a 3 px accent indicator on top.
+- Bottom dock: two live entries (game icon + settings icon); the selected one gets a 3 px accent indicator on top.
 
 ## Three-button interaction
 
-| Button | Action |
-| --- | --- |
-| `UP` | Switch to the previous dock tab |
-| `DOWN` | Switch to the next dock tab |
-| `OK` | Reserved (short / long press are placeholders; power-off is via the physical switch) |
+| Button | Badge (home) | Game | Settings |
+| --- | --- | --- | --- |
+| `UP` / `DOWN` | Switch dock selection | Move the basket left / right | Move selection up / down |
+| `OK` (short press) | Open the selected dock page | Reserved (future skill) | Change the selected item |
+| `OK` (long press) | — | Return to badge | Return to badge |
+
+## Dock pages
+
+### Pixel game
+
+A "catch the gems, dodge the bombs" minigame. Move the basket at the bottom with `UP`/`DOWN` to catch falling gems (green +10, blue +20, gold +50) while avoiding red bombs (−1 life). You start with 3 lives; the fall speed ramps up every 30 points. When lives run out, `OK` (short) restarts the badge view. Long-press `OK` quits back to the badge at any time.
+
+### Settings
+
+A list-style page: **sleep timeout** (30 s / 1 min / 2 min / 5 min / never), **Bluetooth on/off**, and **firmware version**. `UP`/`DOWN` move the selection, `OK` (short) toggles or cycles the selected value. The sleep timeout and Bluetooth state are persisted to NVS and survive reboot. Long-press `OK` returns to the badge.
 
 ## BLE customization (NimBLE)
 
@@ -97,10 +109,12 @@ Custom partition table (`partitions.csv`) enlarges the app partition to 4 MB to 
 
 - Stable startup logs via USB Serial/JTAG; no reboot loop or watchdog reset.
 - Display orientation, colors, edges, and backlight correct; accent color renders correctly.
-- `UP`/`DOWN` switch the dock selection (accent indicator follows).
+- `UP`/`DOWN` switch the dock selection (accent indicator follows); `OK` opens the selected page and long-press `OK` returns.
+- Pixel game: basket moves, gems/bombs score correctly, and Game Over / quit both return to the badge cleanly.
+- Settings: sleep timeout and Bluetooth toggle take effect and survive reboot; version string renders.
 - BLE: phone discovers `FoloToy-Badge`; reading/writing all four characteristics updates UI and survives reboot.
 - Battery shows a plausible SOC and degrades to `--%` when CW2017 is absent.
-- After 3 minutes idle the badge deep-sleeps; any button wakes it.
+- After the configured idle timeout (default 7 min) the badge deep-sleeps; any button wakes it.
 - Repeated page transitions / BLE writes do not leak tasks, objects, or heap.
 
 ## Project structure
@@ -116,25 +130,30 @@ components/bsp/                  Hardware abstraction layer (BSP)
 └── src/                          Driver implementations
 
 components/ui/                    Reusable UI primitive library (shared across apps)
-├── include/ui_pixel.h            ui_block(), ui_label() — pure LVGL building blocks
+├── include/ui_pixel.h            ui_block(), ui_label(), ui_header_bar(), ui_battery_pct()
 └── src/ui_pixel.c
 
 main/                             Application layer
 ├── main.c                        Entry point: init hardware → badge_enter()
 ├── badge/                        Badge application (modular, layered)
-│   ├── badge.h                   Public API: badge_enter, badge_key, badge_update_text, badge_get_text
-│   ├── badge.c                   Facade: orchestrates data, power, and UI submodules
+│   ├── badge.h                   Public API + badge_sub_t (sub-page routing state)
+│   ├── badge.c                   Facade: orchestrates submodules, routes keys to game/settings
 │   ├── badge_data.h / .c          Data model: NVS-backed field storage (name/top/title/status)
-│   ├── badge_power.h / .c         Power management: auto deep-sleep timer, wake-on-button
-│   └── badge_ui.h / .c            LVGL layout: screen construction, dock switching, field refresh
-├── transport/                     Communication layer
-│   └── ble.h / .c                 NimBLE GATT service (advertising + read/write characteristics)
-├── assets/                        Static resources
-│   ├── badge_fonts.h              Font declarations
+│   ├── badge_power.h / .c         Power: configurable deep-sleep timer, wake-on-button
+│   ├── badge_ui.h / .c            LVGL layout: header bar, dock, field refresh
+│   └── badge_theme.h             Shared color / layout constants (theme)
+├── game/                         Pixel game page
+│   └── game.h / .c               "Catch the gems" minigame (enter / exit / key)
+├── settings/                     Settings page
+│   └── settings.h / .c           Sleep timeout, Bluetooth toggle, version (enter / exit / key)
+├── transport/                    Communication layer
+│   └── ble.h / .c                NimBLE GATT service (advertising + read/write characteristics)
+├── assets/                       Static resources
+│   ├── badge_fonts.h             Font declarations
 │   ├── badge_font_gb2312.c        24 px Chinese font (GB2312)
 │   ├── badge_font_gb2312_small.c  14 px Chinese font (GB2312)
 │   └── badge_avatar.h / .c        Pixel avatar image data
-└── CMakeLists.txt                 Build: sources, include dirs, component dependencies
+└── CMakeLists.txt                Build: sources, include dirs, component dependencies
 
 sdkconfig.defaults                 ESP32-C3, USB console, Flash, LVGL defaults
 partitions.csv                     Custom 4 MB app partition
@@ -145,17 +164,19 @@ docs/                              AI hardware development guide
 ### Architecture & dependency direction
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                  Application Layer                    │
-│  main.c ──► badge/ (facade → data, power, ui)        │
-│              transport/ble.c (NimBLE GATT)            │
-├──────────────────────────────────────────────────────┤
-│                  UI Component Library                 │
-│  components/ui/ (ui_block, ui_label — pure LVGL)     │
-├──────────────────────────────────────────────────────┤
-│              Hardware Abstraction Layer               │
-│  components/bsp/ (display, button, audio, battery, i2c)│
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     Application Layer                        │
+│  main.c ──► badge/ (facade → data, power, ui, theme)        │
+│              ├─► game/ (pixel game)   └─► settings/          │
+│              transport/ble.c (NimBLE GATT)                   │
+├──────────────────────────────────────────────────────────────┤
+│                    UI Component Library                      │
+│  components/ui/ (ui_block, ui_label, ui_header_bar,          │
+│                  ui_battery_pct — pure LVGL)                 │
+├──────────────────────────────────────────────────────────────┤
+│                Hardware Abstraction Layer                    │
+│  components/bsp/ (display, button, audio, battery, i2c)      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Dependency direction: `main → ui → bsp`. The `ui` layer is pure LVGL and knows nothing about hardware. The `badge` submodule is split by responsibility: `data` (NVS storage), `power` (sleep timer), and `ui` (LVGL layout) — all coordinated by the `badge.c` facade. New applications can reuse `components/ui` for drawing without duplicating pixel primitives.
+Dependency direction: `main → ui → bsp`. The `ui` layer is pure LVGL and knows nothing about hardware. The `badge` submodule is split by responsibility: `data` (NVS storage), `power` (sleep timer), `ui` (LVGL layout), and `theme` (shared constants) — all coordinated by the `badge.c` facade. Dock pages (`game/`, `settings/`) implement the `enter` / `exit` / `key` interface, are launched via `badge_ui_dock_enter()`, and reuse `components/ui` for drawing. New applications can likewise reuse `components/ui` without duplicating pixel primitives.

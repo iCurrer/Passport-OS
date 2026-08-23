@@ -5,6 +5,7 @@
 // 安卓端使用对应 128 位 UUID: 0000FFEx-0000-1000-8000-00805F9B34FB。
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_nimble_hci.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
@@ -26,6 +27,12 @@ static const char *TAG = "ble";
 #define UUID_STAT  0xFFE4
 
 #define DEVICE_NAME "FoloToy-Badge"
+
+// BLE 开关状态(默认开启),持久化到 NVS (与 badge_power 共用 badge_cfg 命名空间)
+#define NVS_NS_CFG    "badge_cfg"
+#define NVS_KEY_BLE   "ble_on"
+
+static bool s_ble_enabled = true;
 
 static void start_advertising(void);
 
@@ -105,6 +112,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 
 static void start_advertising(void)
 {
+    if (!s_ble_enabled) return;   // 蓝牙关闭时不广播
+
     struct ble_gap_adv_params adv_params = { 0 };
     struct ble_hs_adv_fields fields = { 0 };
 
@@ -133,6 +142,17 @@ static void host_task(void *param)
 
 void ble_init(void)
 {
+    // 从 NVS 读取上次保存的蓝牙开关状态(默认开启)
+    nvs_handle_t nvs;
+    if (nvs_open(NVS_NS_CFG, NVS_READONLY, &nvs) == ESP_OK) {
+        uint8_t v = 1;
+        if (nvs_get_u8(nvs, NVS_KEY_BLE, &v) == ESP_OK) {
+            s_ble_enabled = (v != 0);
+        }
+        nvs_close(nvs);
+    }
+    ESP_LOGI(TAG, "BLE 开关状态=%s", s_ble_enabled ? "开" : "关");
+
     if (nimble_port_init() != ESP_OK) {
         ESP_LOGE(TAG, "NimBLE 初始化失败");
         return;
@@ -149,5 +169,36 @@ void ble_init(void)
     ble_hs_cfg.reset_cb = on_reset;
 
     nimble_port_freertos_init(host_task);
-    ESP_LOGI(TAG, "BLE 已初始化并开始广播");
+    ESP_LOGI(TAG, "BLE 已初始化%s", s_ble_enabled ? "并开始广播" : "(蓝牙关闭,不广播)");
+}
+
+// 设置开关状态并写入 NVS
+static void ble_set_enabled(bool en)
+{
+    s_ble_enabled = en;
+    nvs_handle_t nvs;
+    if (nvs_open(NVS_NS_CFG, NVS_READWRITE, &nvs) == ESP_OK) {
+        nvs_set_u8(nvs, NVS_KEY_BLE, en ? 1 : 0);
+        nvs_commit(nvs);
+        nvs_close(nvs);
+    }
+}
+
+void ble_stop(void)
+{
+    ble_set_enabled(false);
+    int rc = ble_gap_adv_stop();
+    ESP_LOGI(TAG, "BLE 广播已停止 rc=%d", rc);
+}
+
+void ble_restart(void)
+{
+    ble_set_enabled(true);
+    start_advertising();
+    ESP_LOGI(TAG, "BLE 广播已重新开始");
+}
+
+bool ble_is_enabled(void)
+{
+    return s_ble_enabled;
 }

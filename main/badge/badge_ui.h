@@ -12,3 +12,6 @@ void badge_ui_set_field(badge_field_t field);
 // 底部 dock 选中项切换(上/下)。
 void badge_ui_dock_prev(void);
 void badge_ui_dock_next(void);
+
+// 进入当前 dock 选中项对应的功能(如游戏)。
+void badge_ui_dock_enter(void);

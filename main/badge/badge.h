@@ -7,6 +7,7 @@
 // 依赖方向 badge -> {ui,power,data}、ui/power -> data,单向无环。
 #pragma once
 
+#include <stdbool.h>
 #include "bsp_button.h"
 
 // 可自定义字段(与 NVS key 一一对应)
@@ -29,3 +30,13 @@ void badge_update_text(badge_field_t field, const char *s);
 
 // 读取一个字段当前值(供 BLE 读特性返回)。返回指向内部静态缓冲的指针。
 const char *badge_get_text(badge_field_t field);
+
+// ---- 子页面状态(供 badge_ui / game / settings 模块跨层通信) ----
+// 当子页面活跃时, badge_key() 将按键转发到对应模块。
+typedef enum {
+    BADGE_SUB_NONE = 0,
+    BADGE_SUB_GAME,
+    BADGE_SUB_SETTINGS,
+} badge_sub_t;
+
+extern badge_sub_t g_badge_sub;

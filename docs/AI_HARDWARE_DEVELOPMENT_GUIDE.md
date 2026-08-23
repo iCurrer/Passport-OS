@@ -13,7 +13,7 @@ AI 应先完成以下检查：
 3. 判断修改属于哪一层：
    - **硬件抽象层（`components/bsp`）**：可复用硬件驱动，硬件常量放 `bsp_pins.h`。
    - **UI 组件库（`components/ui`）**：纯 LVGL 绘制原语，与硬件无关，跨应用共享。
-   - **应用层（`main`）**：业务逻辑、界面布局、通信协议。子模块按职责拆分至 `badge/`（数据/电源/UI）、`transport/`（BLE）、`assets/`（静态资源）。
+   - **应用层（`main`）**：业务逻辑、界面布局、通信协议。子模块按职责拆分至 `badge/`（数据/电源/UI/主题）、`game/`（像素游戏）、`settings/`（设置页）、`transport/`（BLE）、`assets/`（静态资源）。
 4. 以 `bsp_pins.h` 为当前板卡引脚和面板参数的单一事实来源，不在 `.c` 文件重复写 GPIO、I2C 地址或屏幕尺寸。
 5. 不确定板卡版本、极性、芯片寄存器或接线时，明确标注“未知/待实测”，不要把常见开发板参数当成本板事实。
 
@@ -63,32 +63,35 @@ LCD RST 和功放 PA 使能均定义为 `-1`：LCD 复位脚未接 MCU，驱动�
 固件采用**三层分层架构**，依赖方向为 `main → ui → bsp`（单向无环）：
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                   应用层 (main/)                       │
-│  main.c ──► badge/ (门面 → data, power, ui)          │
-│              transport/ble.c (NimBLE GATT)            │
-├──────────────────────────────────────────────────────┤
-│                  UI 组件库 (components/ui/)            │
-│  ui_block(), ui_label() — 纯 LVGL, 与硬件无关         │
-├──────────────────────────────────────────────────────┤
-│              硬件抽象层 (components/bsp/)              │
-│  display, button, audio, battery, i2c                │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                   应用层 (main/)                             │
+│  main.c ──► badge/ (门面 → data, power, ui, theme)         │
+│              ├─► game/ (像素游戏)  └─► settings/ (设置页)    │
+│              transport/ble.c (NimBLE GATT)                   │
+├──────────────────────────────────────────────────────────────┤
+│                  UI 组件库 (components/ui/)                  │
+│  ui_block(), ui_label(), ui_header_bar(),                    │
+│  ui_battery_pct() — 纯 LVGL, 与硬件无关                      │
+├──────────────────────────────────────────────────────────────┤
+│              硬件抽象层 (components/bsp/)                    │
+│  display, button, audio, battery, i2c                        │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### 4.1 启动流程
 
 ```text
 app_main
-  ├─ bsp_i2c_init
-  ├─ bsp_display_init → bsp_lvgl_init → backlight 70%
-  ├─ bsp_battery_init (软依赖, 失败不阻塞)
-  ├─ bsp_button_init(on_key) (软依赖, 失败不阻塞)
-  ├─ ble_init (NimBLE GATT 服务 + 广播)
-  └─ badge_enter() (LVGL 锁内)
-       ├─ badge_power_init()   (计时 + 自动关机定时器)
-       ├─ badge_data_init()    (NVS 载入四个字段)
-       └─ badge_ui_init()      (构建 screen 并加载)
+  ├─ nvs_flash_init()           (BLE 开关/休眠超时依赖, 失败时擦除并重试)
+  ├─ bsp_i2c_init()
+  ├─ bsp_display_init() → bsp_lvgl_init() → backlight 70%
+  ├─ bsp_battery_init()         (软依赖, 失败不阻塞)
+  ├─ bsp_button_init(on_key)    (软依赖, 失败不阻塞)
+  ├─ ble_init()                 (NimBLE GATT 服务 + 按 NVS 开关广播)
+  └─ badge_enter()              (LVGL 锁内)
+       ├─ badge_power_init()    (读休眠超时 + 自动关机定时器 + 复位诊断)
+       ├─ badge_data_init()     (NVS 载入四个字段)
+       └─ badge_ui_init()       (构建 screen、dock 并加载)
 ```
 
 显示是 UI 的硬依赖，显示或 LVGL 初始化失败时 `app_main` 直接返回。按键、电池、BLE 是软依赖：初始化失败时仅记录日志，不影响名牌界面启动。
@@ -108,20 +111,23 @@ app_main
 
 UI 组件库位于 `components/ui/include/`：
 
-- `ui_pixel.h`：`ui_block()` 创建纯色矩形块，`ui_label()` 创建带字体与颜色的标签。纯 LVGL 原语，与硬件无关，供所有应用页面复用。
+- `ui_pixel.h`：`ui_block()` 创建纯色矩形块，`ui_label()` 创建带字体与颜色的标签，`ui_header_bar()` 绘制统一的顶部导航栏（标题 + 电量条 + 百分比），`ui_battery_pct()` 统一电量百分比取整格式。纯 LVGL 原语，与硬件无关，供所有应用页面复用。
 
 ### 4.4 应用层模块划分
 
-名牌应用（`main/badge/`）按职责拆分为四个模块：
+名牌应用（`main/badge/`）按职责拆分为五个模块：
 
 | 模块 | 文件 | 职责 |
 | --- | --- | --- |
-| 门面 | `badge.h` / `badge.c` | 对外 API（`badge_enter`、`badge_key`、`badge_update_text`、`badge_get_text`），编排子模块 |
+| 门面 | `badge.h` / `badge.c` | 对外 API（`badge_enter`、`badge_key`、`badge_update_text`、`badge_get_text`），编排子模块并把按键路由到子页面 |
 | 数据 | `badge_data.h` / `badge_data.c` | NVS 读写、字段内存缓冲（name / top / title / status） |
-| 电源 | `badge_power.h` / `badge_power.c` | 3 分钟自动深度睡眠、按键唤醒、开机忽略期 |
+| 电源 | `badge_power.h` / `badge_power.c` | 可配置自动深度睡眠（默认 7 分钟，0=永不）、按键唤醒、开机忽略期 |
 | UI | `badge_ui.h` / `badge_ui.c` | LVGL 布局构建、dock 切换、字段刷新，调用 `components/ui` 原语 |
+| 主题 | `badge_theme.h` | 共用颜色/布局常量（背景、文字、强调色、电量条、dock 背景） |
 
 依赖方向：`badge.c → {badge_data, badge_power, badge_ui}`，`badge_ui / badge_power → badge_data`，单向无环。
+
+子页面 `main/game/`（像素游戏）与 `main/settings/`（设置页）实现 `enter`/`exit`/`key` 接口，由 `badge_ui_dock_enter()` 从底部 dock 启动。`badge.h` 的 `badge_sub_t` 枚举记录当前活跃子页面，`badge_key()` 据此把按键转发到对应模块，并在任意子页面统一处理 OK 长按返回名牌（调用 `exit` 后 `badge_enter()`）。
 
 驱动初始化大多设计为幂等，但当前没有统一 deinit API。不要假设可以在运行时反复销毁和重建总线/驱动。
 
@@ -273,7 +279,7 @@ FoloToy AI Passport 的所有硬件批次均使用 8 MB Flash，`sdkconfig.defau
 
 ### 11.3 新增应用页面或功能（应用层）
 
-1. 如果新增的是**独立页面**（如设置页、信息页），在 `main/` 下创建新目录，实现 `enter`/`exit`/`key` 接口。
+1. 如果新增的是**独立页面**（如 `game/`、`settings/` 这类），在 `main/` 下创建新目录，实现 `enter`/`exit`/`key` 接口。
 2. 页面布局调用 `components/ui` 的原语（`ui_block`、`ui_label`），不要重复实现 block/label 逻辑。
 3. 在 `main/CMakeLists.txt` 添加源文件、头文件目录和所需组件依赖。
 4. 页面文字保持英文；说明性注释可用中文。
@@ -434,7 +440,7 @@ idf.py flash monitor
 
 配置陈旧时可执行 `idf.py fullclean`，但这会删除生成的 build 状态；不要用它处理源码工作区问题。
 
-仓库有 `tests/test_ui_pixel_math.c` 轻量逻辑测试源，但当前根 CMake 是 ESP-IDF 工程，未提供统一的 host test 命令。因此 `idf.py build` 是最低自动检查，硬件变更必须上板。
+仓库当前没有 host 端自动化测试；`idf.py build` 是最低自动检查，硬件变更必须上板。
 
 ### 通用上板验收
 

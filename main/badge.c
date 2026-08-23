@@ -1,4 +1,4 @@
-// main/badge.c —— 磨砂黑「心情电子名牌」(阶段 1)。
+// main/badge.c —— 磨砂绿「心情电子名牌」(阶段 1)。
 //
 // 屏幕:ST7789P3 240x320,有效显示区约 y=50..285。
 // 布局:右上角电量 → 姓名(大字) → 状态(主题色) → 英文小字 → 表情小人。
@@ -30,13 +30,13 @@
 static const char *TAG = "badge";
 
 // ---------------------------------------------------------------------------
-// 主题色(磨砂黑)
+// 主题色(磨砂绿)
 // ---------------------------------------------------------------------------
-#define BG_COLOR        0x1A1A1A   // 磨砂黑背景(哑光)
-#define TXT_PRIMARY     0xF5F5F5   // 姓名主文字
-#define TXT_MUTED       0xB0B0B0   // 次要文字
-#define BATT_NORMAL 0xF5F5F5   // 正常电量:白色填充
-#define BATT_WARN   0xF08A24   // 低电量(<20%):橙色
+#define BG_COLOR        0x1E352C   // 磨砂绿背景(提亮的深墨绿,哑光)
+#define TXT_PRIMARY     0xF4F8F5   // 姓名主文字(近白微绿)
+#define TXT_MUTED       0xAFC0B6   // 次要文字(灰绿)
+#define BATT_NORMAL 0xF4F8F5   // 正常电量:近白填充
+#define BATT_WARN   0xF0A030   // 低电量(<20%):橙色
 #define BATT_LOW    0xE04545   // 很低电量(<10%):红色
 
 // ---------------------------------------------------------------------------
@@ -45,9 +45,9 @@ static const char *TAG = "badge";
 //   层级:姓名(主,24px 白)> 职位(次,14px 灰)> 状态(辅,14px 主题色+圆点)。
 //   坐标改动只改这里,不在 UI 代码里散落魔法数字。
 // ---------------------------------------------------------------------------
-#define ACCENT          0x5B8DEF   // 主题强调色(柔蓝):状态点/分隔线/选中指示
-#define LINE_DIV        0x2E2E2E   // 分隔线色
-#define DOCK_BG         0x161616   // 底部 dock 背景
+#define ACCENT          0x4CD964   // 主题强调色(充电绿):状态文字/圆点/dock 选中
+#define LINE_DIV        0x2A473B   // 分隔线色(深绿)
+#define DOCK_BG         0x16241C   // 底部 dock 背景(深绿)
 
 #define LAYOUT_MARGIN_X     22     // 左右留白(与头像/信息列左边距一致)
 #define LAYOUT_HEAD_LINE    40     // 头部底部分隔线 y
@@ -246,9 +246,9 @@ static void badge_init(void)
 // 底部 dock 占位图标:带边框的方块 + 中心圆点。选中项顶部加主题色指示条。
 static void dock_icon(lv_obj_t *parent, int x, int y, bool sel)
 {
-    blk(parent, x, y, 34, 3, sel ? ACCENT : 0x242424);   // 顶部 3px 指示条
-    uint32_t b = sel ? TXT_PRIMARY : 0x3A3A3A;
-    uint32_t d = sel ? ACCENT : 0x3A3A3A;
+    blk(parent, x, y, 34, 3, sel ? ACCENT : 0x2C4A3E);   // 顶部 3px 指示条
+    uint32_t b = sel ? TXT_PRIMARY : 0x3D624F;
+    uint32_t d = sel ? ACCENT : 0x3D624F;
     blk(parent, x, y + 9, 34, 30, b);
     blk(parent, x + 2, y + 11, 30, 26, DOCK_BG);
     blk(parent, x + 13, y + 19, 8, 8, d);

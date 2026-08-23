@@ -110,6 +110,15 @@ LVGL 非线程安全：
 
 `swap_bytes=true` 是必要配置：LVGL 产生小端 RGB565，而 LCD 的 SPI 数据需要高字节在前。颜色异常时应先核对该标志、RGB/BGR 顺序、反色和面板序列，不要一次修改多个变量。
 
+### 5.3 自定义字库（lv_font_conv）与 LVGL 版本匹配
+
+本仓库使用 LVGL 9.5（`components/bsp/idf_component.yml` 声明 `lvgl/lvgl: ^9.5.0`）。**自定义字库必须用与目标 LVGL 版本一致的 `lv_font_conv` 生成**，因为 `lv_font_t.bitmap_format` 的取值语义在 LVGL 8 → 9 之间变了：
+
+- LVGL 8：`0=PLAIN`、`1=COMPRESSED`、`2=A4`（抗锯齿）、`3=A8`。
+- LVGL 9.5：`0=PLAIN`、`1=COMPRESSED`、`2=COMPRESSED_NO_PREFILTER`。
+
+旧版生成的 `bitmap_format=2`（A4）字库在 LVGL 9.5 会被当成 `COMPRESSED_NO_PREFILTER` 去解压，导致**所有文字空白、但布局/图片/声音正常**（不易排查）。重新生成时确认输出为 `bitmap_format=1`（COMPRESSED），并且**必须同时带 ASCII 范围 `0x20-0x7E`**，否则中文正常但英文/数字缺失。生成步骤见 `scripts/gen_badge_fonts.py`。
+
 ## 6. ADC 三按键
 
 三个物理按键共享 GPIO0：3.3 V 经外部 10 kΩ 上拉到 ADC 节点，按键按下后分别通过 0 Ω、1 kΩ、2.2 kΩ 接地。
@@ -402,6 +411,8 @@ idf.py flash monitor
 | 录音缓冲分配失败 | C3 无 PSRAM；缩短录音或改流式，检查 largest free block |
 | 电量显示 `--` | 0x63 是否应答、SOC 是否读到 >100/0xFF、profile/启动等待 |
 | 加大 UI 后 I2S NO_MEM | LCD 双缓冲/LVGL pool 与 I2S DMA 争夺内部 RAM |
+| 中文/所有文字全空白,但布局/图片/声音正常 | 自定义字库与当前 LVGL 版本格式不匹配。LVGL 8 的 `bitmap_format=2` 是 A4,而 LVGL 9.5 里 `2=COMPRESSED_NO_PREFILTER`、`1=COMPRESSED`、`0=PLAIN`。旧字库被当成压缩格式解压 → 全空白。用与目标 lvgl 一致的 `lv_font_conv` 重新生成,确认 `bitmap_format=1`(COMPRESSED) |
+| 字库中文正常但没英文/数字 | 生成字库时漏了 ASCII 范围 `0x20-0x7E`;`--range 0x20-0x7E` 需与中文一起传入 |
 
 ## 15. AI 提交前自检
 

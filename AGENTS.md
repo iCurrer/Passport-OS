@@ -34,6 +34,14 @@ Write C using four-space indentation and K&R-style braces, following nearby file
 
 Before submitting, build from the repository root and inspect warnings. On hardware, verify menu navigation and the affected Display, Button, Audio, or Battery page. For pin, display-rotation, codec-clock, ADC, or DMA changes, explicitly record the observed hardware result in the PR. Do not increase LVGL buffers or audio allocations without checking ESP32-C3 internal RAM usage; the board has no PSRAM.
 
+## Known Traps & Build Notes
+
+- **LVGL font format must match the LVGL version.** This project uses LVGL 9.5 (`components/bsp/idf_component.yml` declares `lvgl/lvgl: ^9.5.0`). `lv_font_t.bitmap_format` semantics changed between LVGL 8 and 9.5 (`2` was A4 in LVGL 8 but is `COMPRESSED_NO_PREFILTER` in 9.5). A font generated for LVGL 8 renders **all text blank while layout/images/sound stay normal** — a hard-to-diagnose failure. Regenerate custom fonts with the `lv_font_conv` version matching the target LVGL and confirm `bitmap_format=1` (`COMPRESSED`); always include the ASCII range `0x20-0x7E` or English/digits are missing. Reproducible script: `scripts/gen_badge_fonts.py`.
+- **`sdkconfig.defaults` must stay ASCII-only.** Non-UTF-8 bytes (e.g. GBK Chinese comments written by a mismatched editor on a Chinese-locale Windows) make `idf.py` fail reading `sdkconfig` with a `UnicodeDecodeError`. Keep comments ASCII (or English) and strip non-ASCII before committing.
+- **Never delete or hand-edit `sdkconfig` as a "fix".** It is gitignored and regenerated from `sdkconfig.defaults`; changes belong in `sdkconfig.defaults`. Deleting it is only safe if `sdkconfig.defaults` fully reproduces the desired config (LVGL, BLE, C++ exceptions/RTTI, partition, console).
+- **C++ exceptions/RTTI are required.** XiaoZhi and parts of the badge stack use `dynamic_cast` and `throw`; keep `CONFIG_COMPILER_CXX_EXCEPTIONS=y` and `CONFIG_COMPILER_CXX_RTTI=y`.
+- **Reference folders stay out of git.** `xiaozhi-esp32-main/` (a large copy of the XiaoZhi firmware used only as a reference) and `_font_backup/` are ignored and must not be committed.
+
 ## Commit & Pull Request Guidelines
 
 History follows Conventional Commit-style subjects such as `feat(bsp): ...`, `feat(demo): ...`, `fix(bsp): ...`, and `docs: ...`. Keep commits focused by subsystem. Pull requests should explain the hardware/revision tested, summarize behavior changes, list build and on-device results, and include photos or screenshots for display changes. Link related issues and call out wiring, pin-map, or compatibility impacts.

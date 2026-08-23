@@ -76,7 +76,9 @@ All pins, addresses, panel parameters, and button voltage windows live only in [
 ## Chinese font note
 
 - Name uses the 24 px full Chinese font; title/status/top bar use the 14 px full Chinese font.
-- The bundled font covers the **GB2312 level-1 common characters** to keep Flash small (whole firmware ≈ 2.1 MB). Fields written via BLE that contain characters outside this set will render as missing glyphs. A backup of the original full-coverage fonts is kept in `_font_backup/` (not committed) if you need broader coverage.
+- The fonts (`main/badge_font_gb2312.c`, `main/badge_font_gb2312_small.c`) are generated for **LVGL 9.5** with `lv_font_conv` and cover **GB2312 (6763 common chars) + ASCII `0x20-0x7E`**. Fields written via BLE that use characters outside this set will render as missing glyphs.
+- ⚠️ LVGL 8 vs 9.5 changed `lv_font_t.bitmap_format` meaning; a font generated for LVGL 8 will show **all text blank** (layout/images/sound still fine). Regenerate with the matching `lv_font_conv` (`scripts/gen_badge_fonts.py`) and confirm `bitmap_format=1` (`COMPRESSED`) and that the ASCII range `0x20-0x7E` is included.
+- The original pre-regeneration font source lives in `_font_backup/` (not committed).
 
 ## Build & flash
 

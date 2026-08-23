@@ -6,6 +6,10 @@ dependencies.lock
 .vscode/
 _font_backup/
 
+# 参考固件副本与中间产物,不纳入 git
+xiaozhi-esp32-main/
+_xiaozhi/
+
 # Android app (android_app) build artifacts
 android_app/.gradle/
 android_app/.kotlin/

@@ -1,15 +1,15 @@
-# --- 目标芯片 ---
+# ---  ---
 CONFIG_IDF_TARGET="esp32c3"
-# 注:ESP32-C3 无 PSRAM,故不设 CONFIG_SPIRAM。
+# :ESP32-C3  PSRAM, CONFIG_SPIRAM
 
 # --- Flash ---
-# FoloToy AI Passport 的所有硬件批次均使用 8MB Flash。
+# FoloToy AI Passport  8MB Flash
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
-# 烧录时按实际探测容量回写镜像头。
+# 
 CONFIG_ESPTOOLPY_HEADER_FLASHSIZE_UPDATE=y
 
-# --- 控制台:USB-Serial-JTAG(C3 原生 USB,GPIO18/19)---
-# 不用 UART0:其默认 TX=GPIO21 与本板背光引脚冲突。
+# --- :USB-Serial-JTAG(C3  USB,GPIO18/19)---
+#  UART0: TX=GPIO21 
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
@@ -17,11 +17,11 @@ CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 CONFIG_LV_COLOR_DEPTH_16=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_MONTSERRAT_20=y
-# LVGL 内置 malloc 池大小(KB)。它是独立静态区、不与系统堆共享,配大了会白白占用 RAM。
-# 名牌头像图片(约25KB)+ 像素装饰对象较多,24KB 会看门狗;留足余量用 48KB。
+# LVGL  malloc (KB), RAM
+# (25KB)+ ,24KB ; 48KB
 CONFIG_LV_MEM_SIZE_KILOBYTES=48
 
-# --- 系统 ---
+# ---  ---
 CONFIG_FREERTOS_HZ=1000
 
 # --- BLE (badge gatt) ---
@@ -29,13 +29,15 @@ CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
 CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
 CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
-# BLE 发射功率 -6dBm(近距离名牌足够,降低功耗)
+# BLE  -6dBm(,)
 CONFIG_BT_CTRL_DFT_TX_POWER_LEVEL_N6=y
 
-# --- 自定义分区表:扩大 app 分区到 4MB,容纳 GB2312 中文字库 ---
+# --- : app  4MB, GB2312  ---
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
-# --- LVGL 大字体(GB2312 6763 字形) ---
+# --- LVGL (GB2312 6763 ) ---
 CONFIG_LV_FONT_FMT_TXT_LARGE=y
+# --- LVGL RLE (,) ---
+CONFIG_LV_USE_FONT_COMPRESSED=y
 

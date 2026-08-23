@@ -1,0 +1,5 @@
+# 自定义分区表:扩大 factory app 分区到 4MB,以容纳 GB2312 静态中文字库。
+# Name,   Type, SubType, Offset,  Size, Flags
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 0x400000,

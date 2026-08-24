@@ -1234,22 +1234,90 @@ Git Commit：
 
 状态：
 
-- [ ] Code
-- [ ] Build
-- [ ] UI
-- [ ] Function
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
 - [ ] Hardware
-- [ ] Commit
+- [x] Commit
 
 实现：
 
+- [x] UP → Previous Page
+- [x] DOWN → Next Page
+- [x] OK → Enter
+- [x] OK Long → Home
+- [x] UP Long → Home
+- [x] DOWN Long → 快速状态切换（占位，语义由 TASK-05 STATUS 提供）
+- [x] 页面循环翻页（HOME ↔ SETTINGS 双向环绕）
+
+### TASK-02 验证记录
+
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（主机纯逻辑自检）
+- [ ] Hardware（NO_BOARD，未实测）
+- [x] Commit
+
+修改文件（仅 `main/` 应用层；未改 BSP、未删旧 badge/game/settings）：
+
+- 新增 `main/app/app_pages.h`（8 页模型 APP_PAGE_HOME..SETTINGS）
+- 新增 `main/app/app_router.h`、`main/app/app_router.c`（全局按键分发 + 循环导航 + 占位页渲染）
+- 修改 `main/main.c`（on_key → app_router_key；boot → app_router_init/enter）
+- 修改 `main/CMakeLists.txt`（加入 app/ 目录与源）
+- 新增 `tests/app_router_logic_check.py`（主机纯逻辑自检）
+
+明细：
+
+- 纯导航 `app_router_page_cycle()`：非法入参钳位到 HOME，(cur+dir+8)%8 双向环绕。
+- 按键映射 `map_event()`：CLICK→UP=PREV/DOWN=NEXT/OK=OK_ACTION；LONG→UP/OK=HOME、DOWN=STATUS_TOGGLE；其余事件(PRESS/DOUBLE)=NONE。
+- 统一在 `app_router_key` 内 `bsp_lvgl_lock/unlock`；保留 `badge_power_key_activity()`（开机忽略期 + 休眠计时）。
+- `app_router_init()` 内调 `badge_power_init()`（自动休眠计时原由 badge_enter 负责，这里补上避免休眠失效）。
+- 占位页用 TASK-01 的 ds_header/ds_footer 渲染：Header(页标题+电量) + 居中“PAGE n/8+标题” + Page Indicator；真实页面后续 TASK 替换。
+
+UI 验证（静态坐标审查）：
+
+- [x] 240×320 无越界（Header/Footer/指示器复用 TASK-01 已验证坐标）
+- [x] 占位主体 label 居中 y=120，位于 Content 36–271
+- [x] 最长页标题 DASHBOARD(14px) 不与电量块(158)重叠
+- [x] Page Indicator 8 点正常（TASK-01 已验）
+- [x] KEY 导航逻辑（主机自检，见下）
+- [ ] 实机中文/英文渲染与按键物理触发（NO_BOARD，未验证）
+
+功能验证（纯逻辑自检 `tests/app_router_logic_check.py`）：
+
+- [x] 循环环绕：0→+1→1；7→+1→0；0→-1→7；100 步内恒在 [0,7]
+- [x] 非法入参钳位：cur=99 → HOME 再步进=1；cur=-1 → HOME
+- [x] 按键映射 9 项全部 PASS（CLICK 三键 / LONG 三键 / PRESS+DOUBLE=NONE）
+- 说明：自检过程中发现测试脚本自身的 `HOME` 常量与意图枚举同名遮蔽 bug（页码 HOME 被 range 重绑为 4），已改 `INT_*` 前缀修正；C 固件用 `APP_INTENT_HOME`/`APP_PAGE_HOME` 不存在该问题，逻辑无误。
+- [ ] 实机翻页/长按（NO_BOARD，未验证）
+
+编译：
+
 ```text
-UP → Previous Page
-DOWN → Next Page
-OK → Enter
-OK Long → Home
-UP Long → Home
-````
+idf.py build
+结果：PASS
+（app_router.c 编译无告警；App 分区占用降至 30% free——
+ 旧 badge_ui/game/settings 渲染不再被引用而未链接，体积下降）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 本 TASK 起 Router 接管全局按键，旧的 `badge_enter` 名牌界面在启动时不再进入（代码保留编译，供后续 HOME 页面复用其身份布局）。
+- 占位页主体“PAGE n/8”为临时占位；各页真实内容在 TASK-03..09 逐个替换。
+- ok/down 长按的“快速状态切换”仅占位无操作，待 TASK-05(STATUS)。
+- Router 目前是单任务锁内渲染占位页；后续页面若引入自身 lv_timer/任务，退出时须先停再删。
 
 ---
 

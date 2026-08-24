@@ -1,5 +1,6 @@
 idf_component_register(
     SRCS "main.c"
+         "app/app_router.c"
          "badge/badge.c"
          "badge/badge_data.c"
          "badge/badge_power.c"
@@ -11,6 +12,7 @@ idf_component_register(
          "assets/badge_font_gb2312_small.c"
          "assets/badge_avatar.c"
     INCLUDE_DIRS "."
+         "app"
          "badge"
          "game"
          "settings"

@@ -15,107 +15,99 @@ jobs:
       - name: 拉取代码
         uses: actions/checkout@v4
 
-      - name: 编译 ESP-IDF 固件
+      - name: 编译 ESP-IDF 固件 + 收集 bin + 合并 factory_all.bin
         uses: espressif/esp-idf-ci-action@v1
         with:
-          esp_idf_version: v5.5.2   # 对齐 AGENTS.md 要求的 ESP-IDF 5.5.x
+          esp_idf_version: v5.5.2
           target: esp32c3
           path: .
+          # 所有需要 IDF 环境(esptool.py / idf.py)的步骤都放这里
+          # 这样 esptool 和 $IDF_PATH 都在同一个容器里可用
           command: |
+            set -euo pipefail
+
             idf.py set-target esp32c3
             idf.py build
 
-      - name: 检查生成的 bin 文件
-        run: |
-          echo "=== build 目录下所有 bin ==="
-          find build/ -name "*.bin" -type f -printf '%p  %s bytes\n' | sort
-          echo "=== flash_args 内容(烧录地址) ==="
-          cat build/flash_args 2>/dev/null || echo "build/flash_args 不存在"
+            echo "=== build 目录下所有 bin ==="
+            find build/ -name "*.bin" -type f -printf '%p  %s bytes\n' | sort
+            echo "=== flash_args 内容 ==="
+            cat build/flash_args
 
-      - name: 收集烧录所需的 bin
-        run: |
-          set -euo pipefail
-          mkdir -p artifact
+            mkdir -p artifact
 
-          # 1. 主应用固件(项目名 FoloToy-AI-Passport -> firmware.bin)
-          cp build/FoloToy-AI-Passport.bin artifact/firmware.bin
+            # 1. 主应用固件
+            cp build/FoloToy-AI-Passport.bin artifact/firmware.bin
 
-          # 2. bootloader / 分区表(缺了就直接失败,不静默跳过)
-          cp build/bootloader/bootloader.bin artifact/bootloader.bin
-          cp build/partition_table/partition-table.bin artifact/partition-table.bin
+            # 2. 必需的 bootloader / 分区表(缺了直接失败,不静默跳过)
+            cp build/bootloader/bootloader.bin artifact/bootloader.bin
+            cp build/partition_table/partition-table.bin artifact/partition-table.bin
 
-          # 3. ota_data_initial(有些项目不生成,可选)
-          if [ -f build/ota_data_initial.bin ]; then
-            cp build/ota_data_initial.bin artifact/ota_data_initial.bin
-          fi
+            # 3. ota_data_initial(非必需,有些项目不生成)
+            if [ -f build/ota_data_initial.bin ]; then
+              cp build/ota_data_initial.bin artifact/ota_data_initial.bin
+            fi
 
-          # 4. flash_args(烧录地址清单)
-          cp build/flash_args artifact/flash_args
+            # 4. flash_args
+            cp build/flash_args artifact/flash_args
 
-          # 5. 合并成一个 8MB 的 factory_all.bin(一把梭烧录)
-          #    从 flash_args 里解析出地址和文件,用 esptool merge_bin
-          #    flash_args 每行格式: --flash_mode dio ... 0x0 bootloader.bin 0x8000 partition-table.bin ...
-          MERGE_ARGS=$(python3 -c "
-          import sys
-          args = []
-          with open('build/flash_args') as f:
-              tokens = f.read().split()
-          # 去掉 --flash_* 这类 option,只留 地址+文件 对
-          i = 0
-          while i < len(tokens):
-              t = tokens[i]
-              if t.startswith('--'):
-                  i += 2  # 跳过 option + value
-                  continue
-              # 地址+文件
-              args.append(tokens[i])
-              args.append(tokens[i+1])
-              i += 2
-          print(' '.join(args))
-          ")
-          echo "merge_bin 参数: $MERGE_ARGS"
-          # IDF 环境里的 esptool, 在 esp-idf-ci-action 容器中可直接调用
-          source "$IDF_PATH/export.sh" >/dev/null 2>&1 || true
-          esptool.py --chip esp32c3 merge_bin \
-            -o artifact/factory_all.bin \
-            --flash_mode dio \
-            --flash_freq 80m \
-            --flash_size 8MB \
-            $MERGE_ARGS
-          # 填充到正好 8MB(0x800000),方便直接整个 flash 烧
-          python3 -c "
-          import os
-          p = 'artifact/factory_all.bin'
-          size = os.path.getsize(p)
-          target = 8 * 1024 * 1024  # 8MB
-          if size < target:
-              with open(p, 'ab') as f:
-                  f.write(b'\xff' * (target - size))
-              print(f'已填充 {target - size} 字节 0xFF -> {os.path.getsize(p)} 字节')
-          else:
-              print(f'size={size} 字节,无需填充')
-          "
+            # 5. 解析 flash_args -> 地址+文件参数, 用 esptool merge_bin 合成一个 8MB 文件
+            MERGE_ARGS=$(python3 -c "
+            args = []
+            with open('build/flash_args') as f:
+                tokens = f.read().split()
+            i = 0
+            while i < len(tokens):
+                t = tokens[i]
+                if t.startswith('--'):
+                    i += 2
+                    continue
+                args.append(tokens[i])
+                args.append(tokens[i+1])
+                i += 2
+            print(' '.join(args))
+            ")
+            echo "merge_bin 参数: $MERGE_ARGS"
+            esptool.py --chip esp32c3 merge_bin \
+              -o artifact/factory_all.bin \
+              --flash_mode dio \
+              --flash_freq 80m \
+              --flash_size 8MB \
+              $MERGE_ARGS
+            # 填充到正好 8MB(0x800000),一把梭整个 flash
+            python3 -c "
+            import os
+            p = 'artifact/factory_all.bin'
+            size = os.path.getsize(p)
+            target = 8 * 1024 * 1024
+            if size < target:
+                with open(p, 'ab') as f:
+                    f.write(b'\xff' * (target - size))
+                print(f'已填充 {target - size} 字节 0xFF -> {os.path.getsize(p)} 字节')
+            else:
+                print(f'size={size} 字节,无需填充')
+            "
 
-          # 6. build_info.txt
-          {
-            echo "Project: FoloToy AI Passport"
-            echo "Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            echo "ESP-IDF version: v5.5.2"
-            echo "Target: esp32c3 (8MB Flash)"
-            echo "Git commit: ${GITHUB_SHA::8}"
-            echo "Git ref:    ${GITHUB_REF_NAME}"
-            echo "CI run ID:  ${GITHUB_RUN_ID}"
-            echo ""
-            echo "File list (bytes):"
-            for f in artifact/*; do
-              printf '  %-30s %s\n' "$(basename "$f")" "$(stat -c%s "$f")"
-            done
-          } > artifact/build_info.txt
+            # 6. build_info.txt(放到 artifact/ 会一起被 upload-artifact 带走)
+            {
+              echo "Project: FoloToy AI Passport"
+              echo "Build date: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+              echo "ESP-IDF version: v5.5.2"
+              echo "Target: esp32c3 (8MB Flash)"
+              echo "Git commit: ${GITHUB_SHA::8}"
+              echo "Git ref:    ${GITHUB_REF_NAME}"
+              echo "CI run ID:  ${GITHUB_RUN_ID}"
+              echo ""
+              echo "File list (bytes):"
+              for f in artifact/*; do
+                printf '  %-30s %s\n' "$(basename "$f")" "$(stat -c%s "$f")"
+              done
+            } > artifact/build_info.txt
 
-          echo "=== artifact 目录最终内容 ==="
-          ls -la artifact/
-          echo "=== build_info.txt ==="
-          cat artifact/build_info.txt
+            echo "=== artifact 最终内容 ==="
+            ls -la artifact/
+            echo "=== build_info.txt ==="
+            cat artifact/build_info.txt
 
       - name: 上传固件产物
         uses: actions/upload-artifact@v4

@@ -16,6 +16,12 @@ defaults:
   run:
     working-directory: android_app
 
+env:
+  # Gradle/下载相关:放宽超时 + 遇到错直接打印详细 stacktrace
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dkotlin.daemon.jvm.options=-Xmx1g -Dkotlin.daemon.jvm.options=-Xms256m -Dhttp.socketTimeout=120000 -Dhttp.connectionTimeout=60000"
+  ORG_GRADLE_PROJECT_org.gradle.internal.http.connectionTimeout: "120000"
+  ORG_GRADLE_PROJECT_org.gradle.internal.http.socketTimeout: "120000"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,34 +34,41 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: 'gradle'
 
       - name: 设置 Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: 授予 gradlew 执行权限
+        run: chmod +x gradlew
+
+      - name: 构建前检查 gradle wrapper
+        run: |
+          set -e
+          ls -la gradlew gradle/wrapper/gradle-wrapper.*
+          echo "gradle/wrapper/gradle-wrapper.properties:"
+          cat gradle/wrapper/gradle-wrapper.properties
+
       - name: 构建 Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug --no-daemon --stacktrace --info
 
       - name: 准备发布产物
         run: |
           set -euo pipefail
-          # 检查默认输出路径下的 APK
           BUILD_DIR=app/build/outputs/apk/debug
           echo "=== APK 输出目录内容 ==="
-          ls -la "$BUILD_DIR"
+          ls -la "$BUILD_DIR" || { echo "ERROR: 输出目录不存在,构建可能失败了。以下是 build/ 里的 outputs 结构:"; find app/build -maxdepth 4 -type d 2>/dev/null || true; exit 1; }
           if [ ! -f "$BUILD_DIR/app-debug.apk" ]; then
-            echo "ERROR: 没找到 $BUILD_DIR/app-debug.apk, 构建可能失败了"
+            echo "ERROR: 没找到 $BUILD_DIR/app-debug.apk"
             exit 1
           fi
 
-          # 重命名为品牌名,用户一眼就认得出
           OUT_DIR=artifact
           mkdir -p "$OUT_DIR"
           cp "$BUILD_DIR/app-debug.apk" "$OUT_DIR/FoloToy-Badge.apk"
 
-          # APK 构建信息
           APK_SIZE=$(stat -c%s "$OUT_DIR/FoloToy-Badge.apk")
           APK_SHA256=$(sha256sum "$OUT_DIR/FoloToy-Badge.apk" | awk '{print $1}')
-          # 从 build.gradle 读取 versionCode/versionName
           VERSION_NAME=$(grep -oP "versionName\s+'\K[^']+" app/build.gradle)
           VERSION_CODE=$(grep -oP "versionCode\s+\K\d+" app/build.gradle)
           {

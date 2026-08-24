@@ -5,6 +5,12 @@
 > 这是一套基于 **ESP32-C3** 的**低功耗个人智能工牌**固件（原 FoloToy AI Passport 渐进式产品化改造而来）。
 > 它以「**上下翻页**」为核心交互，把一块 240×320 屏幕变成你的电子身份名片——展示姓名、职位、状态、二维码，支持头像与个人资料经手机 BLE 修改，化繁为简、深色极简、单屏极低功耗。
 
+<p align="center">
+  <img src="docs/assets/passport-os-v2.jpg" alt="Passport OS V2 展示图" width="320"/>
+  <br/>
+  <em>Passport OS V2 — 个人智能电子工牌实机展示</em>
+</p>
+
 ---
 
 ## 快速认知

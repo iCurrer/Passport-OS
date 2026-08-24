@@ -16,6 +16,9 @@ typedef enum {
     BADGE_FIELD_TOP,        // 顶部导航栏文字
     BADGE_FIELD_TITLE,      // 职位
     BADGE_FIELD_STATUS,     // 状态
+    BADGE_FIELD_BIO,        // 简介(brief intro)
+    BADGE_FIELD_WEBSITE,    // 网站
+    BADGE_FIELD_GITHUB,     // GitHub
     BADGE_FIELD_MAX,
 } badge_field_t;
 

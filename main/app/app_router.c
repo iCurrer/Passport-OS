@@ -12,6 +12,7 @@
 //   - 电源活跃计时/自动休眠复用 badge_power(原由 badge_enter 负责的启动初值在此补上)。
 #include "app_router.h"
 #include "home.h"             // HOME 页真实渲染
+#include "profile.h"          // PROFILE 页真实渲染
 #include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
 #include "bsp_display.h"      // bsp_lvgl_lock / unlock
@@ -100,14 +101,14 @@ typedef struct {
 } app_page_render_t;
 
 static const app_page_render_t s_pages[APP_PAGE_COUNT] = {
-    { home_enter,    home_exit },     // HOME
-    { app_ph_enter,  app_ph_exit },   // PROFILE
-    { app_ph_enter,  app_ph_exit },   // STATUS
-    { app_ph_enter,  app_ph_exit },   // CARDS
-    { app_ph_enter,  app_ph_exit },   // DASHBOARD
-    { app_ph_enter,  app_ph_exit },   // TOOLS
-    { app_ph_enter,  app_ph_exit },   // GAMES
-    { app_ph_enter,  app_ph_exit },   // SETTINGS
+    { home_enter,       home_exit },       // HOME
+    { profile_enter,    profile_exit },    // PROFILE
+    { app_ph_enter,     app_ph_exit },     // STATUS
+    { app_ph_enter,     app_ph_exit },     // CARDS
+    { app_ph_enter,     app_ph_exit },     // DASHBOARD
+    { app_ph_enter,     app_ph_exit },     // TOOLS
+    { app_ph_enter,     app_ph_exit },     // GAMES
+    { app_ph_enter,     app_ph_exit },     // SETTINGS
 };
 
 // 切换页:退出旧页 → 记录新页 → 渲染新页。须持 LVGL 锁。

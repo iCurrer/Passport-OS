@@ -1398,18 +1398,80 @@ a508738
 
 # TASK-04：PROFILE
 
-# TASK-04：PROFILE
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-04 验证记录
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（纯逻辑审查）
+- [ ] Hardware（已烧录；PROFILE 页内容未实机确认）
+- [x] Commit
+
+修改文件（仅 `main/` 应用层；未改 BSP、未改 ui 层、未动已验导航/按键逻辑）：
+
+- 新增 `main/apps/profile/profile.h`、`main/apps/profile/profile.c`（V2 PROFILE 页渲染）
+- 修改 `main/badge/badge.h`（badge_field_t 新增 BIO/WEBSITE/GITHUB）
+- 修改 `main/badge/badge_data.c`（新增 3 个 NVS 字段与读写；nvs_load_str 增加空默认值防回写）
+- 修改 `main/app/app_router.c`（页面表 PROFILE 槽位换成 profile_enter/exit）
+- 修改 `main/CMakeLists.txt`（加入 apps/profile）
+
+明细：
+
+- PROFILE 用 ds_header/ds_footer 渲染：Header("PROFILE"+电量) + 头像(现有素材缩至 64 宽) + 姓名(24px) + 职位/简介/网站(14px)。
+- 数据全部来自 badge_data(NVS)：name/title/bio/website；**空字段自动跳过**（add_centered_line）。
+- 数据模型扩展：badge_field_t 新增 bio/website/github 三字段并持久化 NVS；nvs_load_str 空默认值不再每次开机回写 NVS。
+- 头像仍为现有全身素材等比缩放；真 80×80 头像在 TASK-12。
+
+UI 验证（静态坐标审查，Content 36–271）：
+
+- [x] 头像 y48..约173(64 宽)、姓名 24px y184..208、职位 216、简介 236、网站 256 —— 均在 Content 内,不触 Footer(272)
+- [x] 空字段跳过,避免空行/重叠
+- [ ] 中文/英文/长文本实机渲染（未实机确认；长 bio/website 无换行会横向溢出,沿用旧行为）
+- [ ] 头像实机显示效果（未实机确认）
+
+功能验证（纯逻辑审查）：
+
+- [x] 新字段 NVS 读/写与默认空值逻辑（badge_data_get/set 全覆盖）
+- [x] PROFILE enter/exit 构建/销毁独立 screen
+- [x] Router 表仅替换 PROFILE 槽位,其余页不变
+- [ ] 实机翻页到 PROFILE（未实机确认）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（profile.c 编译无告警；.bin=0x2dac60，App 分区剩 29%）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- PROFILE 头像暂用全身素材缩略显示,非规范头像文件;TASK-12 接入真 80×80 头像。
+- 新增的 bio/website/github 字段尚未暴露给 BLE 手机侧(当前 BLE 只暴露 name/top/title/status);BLE 字段扩展在后续 BLE/同步 TASK。
+- 长 bio/website 无自动换行,超宽横向溢出;列入最终 UI audit。
 
 ---
+
+# TASK-05：STATUS
 
 # TASK-05：STATUS
 

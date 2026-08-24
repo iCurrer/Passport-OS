@@ -1,6 +1,6 @@
 // main/ble.c —— 名牌 BLE 服务(ESP-IDF NimBLE)。
-// 广播名:FoloToy-Badge。GATT 服务含 4 个可写/可读特性:
-//   name / top / title / status,对应姓名/顶部文字/职位/状态。
+// 广播名:FoloToy-Badge。GATT 服务含 7 个可写/可读特性:
+//   name / top / title / status / bio / website / github
 // 写入时更新 NVS 并刷新 LVGL 界面(见 badge_update_text)。
 // 安卓端使用对应 128 位 UUID: 0000FFEx-0000-1000-8000-00805F9B34FB。
 #include "esp_log.h"
@@ -20,11 +20,14 @@
 static const char *TAG = "ble";
 
 // 16 位 UUID(安卓端用 128 位形式)
-#define UUID_SVC   0xFFE0
-#define UUID_NAME  0xFFE1
-#define UUID_TOP   0xFFE2
-#define UUID_TITLE 0xFFE3
-#define UUID_STAT  0xFFE4
+#define UUID_SVC     0xFFE0
+#define UUID_NAME    0xFFE1
+#define UUID_TOP     0xFFE2
+#define UUID_TITLE   0xFFE3
+#define UUID_STAT    0xFFE4
+#define UUID_BIO     0xFFE5
+#define UUID_WEBSITE 0xFFE6
+#define UUID_GITHUB  0xFFE7
 
 #define DEVICE_NAME "FoloToy-Badge"
 
@@ -43,8 +46,8 @@ static int on_char_access(uint16_t conn_handle, uint16_t attr_handle,
     badge_field_t field = (badge_field_t)(intptr_t)arg;
 
     if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
-        // 提取写入的字符串(可能跨 mbuf)
-        char buf[40];
+        // 提取写入的字符串(可能跨 mbuf)。64 容纳最长字段缓冲(bio/website/github=48)
+        char buf[64];
         uint16_t len = 0;
         int r = ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf) - 1, &len);
         if (r == 0) {
@@ -81,6 +84,15 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
             { .uuid = BLE_UUID16_DECLARE(UUID_STAT),
               .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
               .arg = (void *)(intptr_t)BADGE_FIELD_STATUS },
+            { .uuid = BLE_UUID16_DECLARE(UUID_BIO),
+              .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+              .arg = (void *)(intptr_t)BADGE_FIELD_BIO },
+            { .uuid = BLE_UUID16_DECLARE(UUID_WEBSITE),
+              .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+              .arg = (void *)(intptr_t)BADGE_FIELD_WEBSITE },
+            { .uuid = BLE_UUID16_DECLARE(UUID_GITHUB),
+              .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+              .arg = (void *)(intptr_t)BADGE_FIELD_GITHUB },
             { 0 },
         },
     },

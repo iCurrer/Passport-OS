@@ -1841,16 +1841,68 @@ Git Commit：
 
 # TASK-10：PROFILE SYNC / BLE 数据
 
-# TASK-10：BLE Profile V2
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-10 验证记录
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI（无 UI 改动）
+- [x] Function（纯逻辑审查）
+- [ ] Hardware（已烧录；BLE 实机写→重启持久化未确认）
+- [x] Commit
+
+修改文件（仅 `main/transport/ble.c`；未改 BSP、未改 ui 层、未动其它模块）：
+
+- `main/transport/ble.c`：GATT 服务从 4 个特性扩到 7 个(name/top/title/status/**bio/website/github**)。
+- 新增 UUID：BIO 0xFFE5、WEBSITE 0xFFE6、GITHUB 0xFFE7。
+- 写缓冲 `buf[40] → buf[64]`,容纳最长字段(bio/website/github 各 48 字节)。
+
+明细：
+
+- 新特性走同一 `on_char_access`,arg 对应 badge_field_t;写入经 badge_update_text → badge_data_set 持久化 NVS + badge_ui_set_field。
+- 持久化链路沿用既有 NVS 机制:badge_data_init 开机载入,写后 nvs_commit;重启仍在(继承自 name/top/title/status 已验证路径)。
+- 读路径返回内部静态缓冲,安卓可读。
+
+UI 验证：N/A(无 UI 改动)。
+
+功能验证（纯逻辑审查）：
+
+- [x] 7 个特性全部 READ|WRITE,arg 一一对应 badge_field_t
+- [x] 写缓冲 64 覆盖 48 字节最长字段,无截断
+- [x] NVS 持久化链路完整(badge_data_set 写+commit,init 读)
+- [ ] 实机 APP→BLE→ESP32→NVS→Restart→数据仍在 全链路（未实机确认,需手机 + 重启）
+- [ ] 安卓端新增字段读写（TASK-11 Android Preview 实现）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（ble.c 编译通过;.bin=0x2e5540,App 分区剩 28%）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 安卓端目前只暴露 name/top/title/status;bio/website/github 的手机侧界面在 **TASK-11(Android Preview)** 添加。
+- 实机"写→重启→仍在"链路需真机 + 手机 App 验证,当前未执行。
 
 必须验证：
 

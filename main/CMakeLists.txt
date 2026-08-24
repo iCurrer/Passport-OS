@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS "main.c"
          "app/app_router.c"
+         "app/app_list.c"
          "avatar/avatar_storage.c"
          "apps/home/home.c"
          "apps/profile/profile.c"

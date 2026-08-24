@@ -35,15 +35,6 @@
 
 static const char *TAG = "app_router";
 
-// 页面标题(英文,符合 UI 文字规范)。与 app_pages.h 顺序一致。
-static const char *s_titles[APP_PAGE_COUNT] = {
-    "HOME", "PROFILE", "STATUS", "CARDS",
-    "DASHBOARD", "TOOLS", "GAMES", "SETTINGS",
-};
-
-// 占位页(未实现页面)状态
-static lv_obj_t   *s_ph_scr;     // 占位页根 screen
-static ds_dots_t   s_ph_dots;    // 占位页 Page Indicator
 static app_page_t  s_cur = APP_PAGE_HOME;
 
 // ============================================================================
@@ -57,50 +48,7 @@ app_page_t app_router_page_cycle(app_page_t cur, int dir)
 }
 
 // ============================================================================
-// 占位页渲染(Header + 居中页码/标题 + Footer 指示器)。须持 LVGL 锁。
-// 各页 TASK 实现后,在 s_pages 表里把对应格子换成真实页的 enter/exit。
-// ============================================================================
-static void app_ph_enter(app_page_t page)
-{
-    if (page < 0 || page >= APP_PAGE_COUNT) return;
-
-    s_ph_scr = lv_obj_create(NULL);
-    lv_obj_remove_flag(s_ph_scr, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(s_ph_scr, lv_color_hex(DS_BG), 0);
-    lv_obj_set_style_border_width(s_ph_scr, 0, 0);
-    lv_obj_set_style_pad_all(s_ph_scr, 0, 0);
-
-    // Header:页标题 + 电量 + 分隔线
-    ds_header(s_ph_scr, s_titles[page], bsp_battery_soc(),
-              &badge_font_gb2312_small, &lv_font_montserrat_14);
-
-    // 占位主体:PAGE n/8 + 标题(后续真实页面替换)
-    char buf[32];
-    snprintf(buf, sizeof(buf), "PAGE %d / %d\n%s",
-             (int)page + 1, APP_PAGE_COUNT, s_titles[page]);
-    lv_obj_t *lbl = lv_label_create(s_ph_scr);
-    lv_label_set_text(lbl, buf);
-    lv_obj_set_style_text_font(lbl, &badge_font_gb2312, 0);
-    lv_obj_set_style_text_color(lbl, lv_color_hex(DS_TEXT_PRIMARY), 0);
-    lv_obj_set_style_text_align(lbl, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_center(lbl);
-    lv_obj_set_y(lbl, 120);
-
-    // Footer:Page Indicator
-    ds_footer(s_ph_scr, &s_ph_dots, APP_PAGE_COUNT, page);
-
-    lv_screen_load(s_ph_scr);
-}
-
-static void app_ph_exit(void)
-{
-    if (s_ph_scr) { lv_obj_delete(s_ph_scr); s_ph_scr = NULL; }
-    // s_ph_dots 引用的圆点对象随 screen 一并删除,不再使用
-}
-
-// ============================================================================
-// 页面渲染表:每页一个 build/destroy。HOME 用真实渲染,其余页暂用占位。
-// 后续各页面 TASK 逐个把占位格替换为对应 apps/<page> 的 enter/exit。
+// 页面渲染表:每页一个 build/destroy。全部 8 页使用各页真实渲染(apps/*)。
 // ============================================================================
 typedef struct {
     void (*build)(app_page_t page);               // 构建并加载该页屏幕(router 已持锁)
@@ -165,15 +113,17 @@ void app_router_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     if (!badge_power_key_activity()) return;   // 开机忽略期:吞掉
 
-    // 短按:若当前页有局部按键处理,优先交给它;消费则返回(如 TOOLS 列表选择)。
-    if (ev == BSP_BTN_CLICK && s_pages[s_cur].key) {
+    // 短按/长按:若当前页有局部按键处理,优先交给它。列表页(TOOLS/GAMES/SETTINGS)用
+    // app_list 控制器消费:长按 OK 在 ENTRY 态不消费(交全局回首页),在 MENU/CHILD 态
+    // "返回上一级";UP/DOWN 长按不消费则交全局(回 HOME / 快速状态切换)。
+    if ((ev == BSP_BTN_CLICK || ev == BSP_BTN_LONG) && s_pages[s_cur].key) {
         if (!bsp_lvgl_lock(300)) return;
         bool handled = s_pages[s_cur].key(btn, ev);
         bsp_lvgl_unlock();
         if (handled) return;
     }
 
-    // 其余(长按 + 未被页面消费的短按)→ 全局映射
+    // 其余(未被页面消费的短按/长按)→ 全局映射
     app_intent_t it = map_event(btn, ev);
     if (it == APP_INTENT_NONE) return;
 
@@ -215,7 +165,6 @@ void app_router_init(void)
     avatar_storage_init();       // 挂载 SPIFFS,头像文件 /avatar.bin
     badge_power_init();          // 启动自动休眠计时 + 复位诊断(原由 badge_enter 负责)
     s_cur = APP_PAGE_HOME;
-    s_ph_scr = NULL;
     ESP_LOGI(TAG, "router ready, pages=%d", APP_PAGE_COUNT);
 }
 

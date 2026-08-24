@@ -2293,6 +2293,55 @@ Remarks —— 仍需真机复验项（未连板，按纪律不计 PASS）：
 - CARDS 页二维码内容为空时显示 "NO CARD DATA"；真实可扫描性需写入 website 后真机扫码。
 - DASHBOARD 诚实用 UPTIME 代替墙钟（无 RTC），无假时间。
 
+### 后续 UX 修复：列表页「入口态→菜单态→子屏」三态导航（§31 之后实施）
+
+背景与问题：早期 TOOLS/GAMES/SETTINGS（6/7/8 页）把短按 UP/DOWN 全部用于列表内选择，导致这几页无法短按翻页（TASK-08/09/13 已标注为已知取舍）。用户反馈需恢复短按翻页，同时保留进入菜单的操作。
+
+方案：新增共享列表页控制器 `main/app/app_list.c/.h`，把三页统一为**三态导航**，三页只填配置与子屏回调，状态机/按键不重复实现：
+
+```text
+ENTRY(入口态,默认) --OK--> MENU(菜单态) --OK--> CHILD(子屏)
+     |                      |                       |
+     UP/DOWN 短按=全局翻页    长按 OK=返回入口          长按 OK=返回菜单
+     UP/OK 长按=全局回首页
+```
+
+按键语义（改后）：
+
+| 位置 | 短按 UP/DOWN | 长按 OK | 长按 UP/DOWN |
+| --- | --- | --- | --- |
+| 页面 1–5（HOME…DASHBOARD） | 全局翻页（不变） | 回首页（不变） | 回首页/快速状态（不变） |
+| 6/7/8 入口态 | **全局翻页（修复）** | 回首页 | 全局 |
+| 6/7/8 菜单态 | 列表内选择 | **返回上一级（入口态）** | 全局 |
+| 6/7/8 子屏（秒表/游戏/占位） | 子屏操作 | **返回上一级（菜单态）** | 全局 |
+
+- TOOLS：入口 → 菜单（TIMER/STOPWATCH/CALCULATOR/MORSE）→ 秒表子屏，其余 COMING SOON。
+- GAMES：入口 → 菜单（REACTION/MEMORY/MORSE/CATCH）→ CATCH（game.c），其余占位；game 结束（EXITED）自动回菜单。
+- SETTINGS：入口 → 菜单（BLE/SLEEP/VERSION）→ 无子屏，OK 原地开关/循环（值列经 value_cb 刷新）。
+
+改动文件：
+
+- 新增 `main/app/app_list.h/.c`（三态控制器：ENTRY/MENU/CHILD 状态机 + 行值列 + 按键委托）
+- `main/app/app_router.c`：局部 `key` 回调改为同时接收短按与长按（未消费才落全局）；移除已全量替换的占位页 `app_ph_enter/exit` 死代码
+- `main/apps/tools/tools.c`、`main/apps/games/games.c`、`main/apps/settings/settings_page.c`：改为复用 `app_list`，各自只留文案与 enter_child/exit_child/child_key/value_cb
+- `main/CMakeLists.txt`：加入 `app/app_list.c`
+
+验证：
+
+```text
+idf.py build
+结果：PASS（exit 0，无代码告警；.bin = 0x2f1e30，App 分区剩 26% free）
+UI: STATIC REVIEW PASS —— 入口页/菜单/子屏坐标均在 Content 36–271 内，不触 Footer
+Function: 三态状态机静态审查 + 既有主机自检脚本仍 PASS
+Hardware: NOT TESTED（未连板，翻页恢复与长按返回需真机确认）
+```
+
+Git Commit：
+
+```text
+9faec8b
+```
+
 ---
 
 # 32. 最终功能验收

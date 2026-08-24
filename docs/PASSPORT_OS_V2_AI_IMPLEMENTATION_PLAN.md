@@ -2103,29 +2103,107 @@ Git Commit：
 
 # TASK-13：SETTINGS
 
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-13 验证记录
+
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（主机纯逻辑自检）
+- [ ] Hardware（已烧录；SETTINGS 页与低功耗链路实机未确认）
+- [x] Commit
+
+修改文件：
+
+- 新增 `main/apps/settings/settings_page.h/.c`（V2 SETTINGS 页:BLE 开关 / SLEEP 超时 / VERSION）
+- `main/transport/ble.c`：恢复 ble_init 读取 NVS ble_on(默认开);SETTINGS 页开关经 ble_stop/ble_restart 持久化
+- `main/app/app_router.c`：SETTINGS 槽位用 settings_page_enter/exit/key
+- `main/CMakeLists.txt`：加入 apps/settings
+- 新增 `tests/settings_logic_check.py`
+
+明细：
+
+- SETTINGS 列表：**BLE**(OK 开关,经 ble_stop/ble_restart 写 NVS)、**SLEEP**(OK 循环 30s/1m/2m/5m/never,经 badge_power_set_timeout)、**VERSION**(只读 v2.0.0)。
+- UP/DOWN 选择(高亮同 TOOLS),OK 开关/循环;长按全局回 HOME。
+- **低功耗**：BLE 默认开、可在 SETTINGS 关闭并持久化(NVS ble_on);重启后读回。深睡/唤醒/显示关闭复用既有 badge_power。
+
+UI 验证（静态坐标审查）：
+
+- [x] 3 行列表 y56..152(步进 48,行高 44) —— 末行 196 <271,不触 Footer
+- [x] 右值显示(BLE ON/OFF、SLEEP 标签、版本)
+- [ ] 实机 SETTINGS 显示与操作（未实机确认）
+
+功能验证（主机自检 `tests/settings_logic_check.py`）：
+
+- [x] find_sleep_idx 匹配/未知回退、SLEEP 循环(含 wrap 到 30s)
+- [x] 列表 UP/DOWN 选择环绕(3 项)
+- [x] BLE 开关经 ble_stop/ble_restart 持久化 NVS 逻辑
+- [ ] 实机 BLE 开关切换、休眠超时切换（未实机确认）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（settings_page.c 编译通过;.bin=0x2f1d90,App 分区剩 26%）
+```
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 恢复 NVS 读后,你板子上旧的 `ble_on=0` 会让 BLE 开机为关;请在 SETTINGS 页把它打开(会持久化)。
+- 低功耗全链路(BLE OFF/Wi-Fi OFF/Display OFF/Deep Sleep/Wake/UI Restore)大多复用 badge_power 既有实现,真机待验证。
+
 ---
 
 # TASK-13：低功耗
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code（复用既有 badge_power 深睡/唤醒;BLE 关闭经 SETTINGS 开关持久化）
+- [x] Build
+- [x] UI（N/A,无新 UI 除 SETTINGS 开关）
+- [x] Function
+- [ ] Hardware（未实机验证深睡→唤醒→UI 恢复链路）
+- [x] Commit
 
 验证：
 
 ```text
-BLE OFF
-Wi-Fi OFF
-Display OFF
-Deep Sleep
-Wake
-UI Restore
+BLE OFF      ← SETTINGS 页关闭并持久化
+Wi-Fi OFF    ← 未启用
+Display OFF  ← 深睡前关闭(既有 badge_power)
+Deep Sleep   ← 无操作超时(既有 badge_power)
+Wake         ← GPIO0 低电平唤醒(既有)
+UI Restore   ← 唤醒重建当前页
 ```
+
+记录：
+
+- BLE 关闭：SETTINGS 页 BLE 项 OK 关闭 → ble_stop() 写 NVS `ble_on=0`,重启读回关闭。
+- Wi-Fi OFF：固件未初始化 Wi-Fi,恒关。
+- Display OFF / Deep Sleep / Wake：`badge_power`(TASK 基线)已实现——深睡前关背光 + LCD DISP_OFF + 提交 NVS,GPIO0 低电平唤醒,开机 800ms 忽略按键。
+- UI Restore：唤醒即冷启动重建,Router 渲染 HOME。
+- **Hardware：NOT TESTED** —— 深睡功耗与唤醒链路需真机实测(当前未测量)。
+
+---
+
+# 31. 最终 UI 验收
 
 ---
 

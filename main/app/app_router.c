@@ -18,6 +18,7 @@
 #include "dashboard.h"        // DASHBOARD 页真实渲染
 #include "tools.h"            // TOOLS 页真实渲染 + 页内按键(tools_key)
 #include "games.h"            // GAMES 页真实渲染 + 页内按键(games_key)
+#include "settings_page.h"    // SETTINGS 页真实渲染 + 页内按键(settings_page_key)
 #include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
 #include "avatar_storage.h"   // avatar_storage_init(SPIFFS 挂载 + 头像文件)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
@@ -116,7 +117,7 @@ static const app_page_render_t s_pages[APP_PAGE_COUNT] = {
     { dashboard_enter,  dashboard_exit,  NULL,         NULL },          // DASHBOARD
     { tools_enter,      tools_exit,      NULL,         tools_key },     // TOOLS
     { games_enter,      games_exit,      NULL,         games_key },     // GAMES
-    { app_ph_enter,     app_ph_exit,     NULL,         NULL },          // SETTINGS
+    { settings_page_enter, settings_page_exit, NULL, settings_page_key }, // SETTINGS
 };
 
 // 切换页:退出旧页 → 记录新页 → 渲染新页。须持 LVGL 锁。

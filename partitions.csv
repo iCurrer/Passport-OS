@@ -1,7 +1,8 @@
-# 自定义分区表:扩大 factory app 分区到 4MB,以容纳 GB2312 静态中文字库。
-# 新增 storage(spiffs)分区,存放用户头像 /avatar.bin(80x80 RGB565 = 12,800B)。
+# 自定义分区表:factory app 分区 6MB,以容纳 GB2312 30px 静态中文字库(全量 6763 字)。
+# storage(spiffs) 分区存放用户头像 /avatar.bin(80x80 RGB565 = 12,800B),1.94MB 富余。
+# 布局(8MB Flash):App 0x10000..0x610000(6MB),storage 0x610000..0x800000(≈1.94MB)。
 # Name,   Type, SubType, Offset,  Size, Flags
 nvs,      data, nvs,     0x9000,  0x6000,
 phy_init, data, phy,     0xf000,  0x1000,
-factory,  app,  factory, 0x10000, 0x400000,
-storage,  data, spiffs,  0x410000, 0x200000,
+factory,  app,  factory, 0x10000, 0x600000,
+storage,  data, spiffs,  0x610000, 0x1F0000,

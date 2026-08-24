@@ -16,6 +16,7 @@
 #include "status.h"           // STATUS 页真实渲染 + status_cycle(快速状态切换)
 #include "cards.h"            // CARDS/QR 页真实渲染
 #include "dashboard.h"        // DASHBOARD 页真实渲染
+#include "tools.h"            // TOOLS 页真实渲染 + 页内按键(tools_key)
 #include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
 #include "bsp_display.h"      // bsp_lvgl_lock / unlock
@@ -99,20 +100,21 @@ static void app_ph_exit(void)
 // 后续各页面 TASK 逐个把占位格替换为对应 apps/<page> 的 enter/exit。
 // ============================================================================
 typedef struct {
-    void (*build)(app_page_t page);   // 构建并加载该页屏幕(router 已持锁)
-    void (*destroy)(void);            // 销毁该页屏幕
-    void (*action)(void);             // OK 短按"进入/操作当前页"(可 NULL);须持锁
+    void (*build)(app_page_t page);               // 构建并加载该页屏幕(router 已持锁)
+    void (*destroy)(void);                        // 销毁该页屏幕
+    void (*action)(void);                         // OK 短按"进入/操作当前页"(可 NULL);须持锁
+    bool (*key)(bsp_btn_t, bsp_btn_ev_t);         // 页内局部按键(短按优先;返回 true=已消费);须持锁
 } app_page_render_t;
 
 static const app_page_render_t s_pages[APP_PAGE_COUNT] = {
-    { home_enter,       home_exit,       NULL },          // HOME
-    { profile_enter,    profile_exit,    NULL },          // PROFILE
-    { status_enter,     status_exit,     status_cycle },  // STATUS
-    { cards_enter,      cards_exit,      NULL },          // CARDS
-    { dashboard_enter,  dashboard_exit,  NULL },          // DASHBOARD
-    { app_ph_enter,     app_ph_exit,     NULL },          // TOOLS
-    { app_ph_enter,     app_ph_exit,     NULL },          // GAMES
-    { app_ph_enter,     app_ph_exit,     NULL },          // SETTINGS
+    { home_enter,       home_exit,       NULL,         NULL },          // HOME
+    { profile_enter,    profile_exit,    NULL,         NULL },          // PROFILE
+    { status_enter,     status_exit,     status_cycle, NULL },          // STATUS
+    { cards_enter,      cards_exit,      NULL,         NULL },          // CARDS
+    { dashboard_enter,  dashboard_exit,  NULL,         NULL },          // DASHBOARD
+    { tools_enter,      tools_exit,      NULL,         tools_key },     // TOOLS
+    { app_ph_enter,     app_ph_exit,     NULL,         NULL },          // GAMES
+    { app_ph_enter,     app_ph_exit,     NULL,         NULL },          // SETTINGS
 };
 
 // 切换页:退出旧页 → 记录新页 → 渲染新页。须持 LVGL 锁。
@@ -160,6 +162,15 @@ void app_router_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
     if (!badge_power_key_activity()) return;   // 开机忽略期:吞掉
 
+    // 短按:若当前页有局部按键处理,优先交给它;消费则返回(如 TOOLS 列表选择)。
+    if (ev == BSP_BTN_CLICK && s_pages[s_cur].key) {
+        if (!bsp_lvgl_lock(300)) return;
+        bool handled = s_pages[s_cur].key(btn, ev);
+        bsp_lvgl_unlock();
+        if (handled) return;
+    }
+
+    // 其余(长按 + 未被页面消费的短按)→ 全局映射
     app_intent_t it = map_event(btn, ev);
     if (it == APP_INTENT_NONE) return;
 

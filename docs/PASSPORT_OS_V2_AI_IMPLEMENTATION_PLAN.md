@@ -1694,18 +1694,79 @@ Git Commit：
 
 # TASK-08：TOOLS
 
-# TASK-08：TOOLS
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-08 验证记录
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（主机纯逻辑自检）
+- [ ] Hardware（已烧录；TOOLS 页与秒表实机未确认）
+- [x] Commit
+
+修改文件（仅 `main/` 应用层；未改 BSP、未改 ui 层）：
+
+- 新增 `main/apps/tools/tools.h`、`main/apps/tools/tools.c`（V2 TOOLS 列表页 + 秒表工具）
+- 修改 `main/app/app_router.c`（页面表加 `key` 局部按键回调；短按优先交给页面消费；TOOLS 槽位用 tools*）
+- 修改 `main/CMakeLists.txt`（加入 apps/tools）
+- 新增 `tests/tools_list_check.py`（主机纯逻辑自检）
+
+明细：
+
+- TOOLS 列表：TIMER/STOPWATCH/CALCULATOR/MORSE；UP/DOWN 选择(高亮,选中=卡片底+强调文字)，OK 进入工具。
+- **交互模型扩展**：Router 页面表新增 `key` 回调——短按先交给当前页局部消费(列表选择/工具操作)，消费不了才走全局翻页；**长按仍全局**(OK/UP 回 HOME、DOWN 快速状态)。
+- STOPWATCH 已实现(OK 启动/停止,秒表 MM:SS 每秒刷新);TIMER/CALCULATOR/MORSE 为 COMING SOON 占位屏。
+- 工具屏 UP/DOWN 走全局翻页离开;OK 长按回 HOME。
+
+UI 验证（静态坐标审查，Content 36–271）：
+
+- [x] 列表 4 行 y56..200(步进 48,行高 44) —— 末行 244 <271,不触 Footer
+- [x] 秒表大字 y100、提示 y152
+- [x] 选中高亮(卡片底 #111111 / 强调文字)与未选中(次要色)区分
+- [ ] 实机列表高亮移动与秒表计时渲染（未实机确认）
+
+功能验证（纯逻辑自检 `tests/tools_list_check.py`）：
+
+- [x] 列表选择 UP/DOWN 环绕(4x DOWN 回 0,4x UP 从 3 回 3)
+- [x] 秒表 OK 启停与累计逻辑、lv_timer 创建/销毁(tools_exit 先停再删)
+- [x] Router 短按委托:页面 key 消费优先,长按仍全局
+- [ ] 实机按键列表选择/进入秒表/启停（未实机确认）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（tools.c 编译通过;.bin=0x2e48c0,App 分区剩 28%）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 列表页内 UP/DOWN 短按被用于选择,故在该页无法用短按直接翻页;离开列表页用长按(OK/UP=HOME)或进入工具后 UP/DOWN 翻页。此为"页面局部按键优先"设计取舍,待真机确认是否符合预期。
+- 秒表无"归零"操作(仅启停),可后续加 RESET。
+- 其余工具(TIMER/CALCULATOR/MORSE)为占位,后续 TASK/迭代实现。
 
 ---
+
+# TASK-09：GAMES
 
 # TASK-09：GAMES
 

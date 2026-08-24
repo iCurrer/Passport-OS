@@ -644,10 +644,10 @@ class MainActivity : ComponentActivity() {
             paint.color = cLine
             canvas.drawRect(0f, 34 * s, w, 34 * s + 2f * s, paint)
 
-            // ---- 头像:80×80 居中(与真机 HOME 一致 y=56) ----
-            val avS = 80f * s          // 头像在预览中的显示尺寸
+            // ---- 头像:90×90 居中(与真机 HOME 一致 y=54, 顶到分隔线34 = 底到姓名164) ----
+            val avS = 90f * s          // 头像在预览中的显示尺寸
             val avX = (w - avS) / 2f
-            val avY = 56f * s
+            val avY = 54f * s
             avatarRect.set(avX, avY, avX + avS, avY + avS)
             val av = userAvatar
             if (av != null) {
@@ -658,9 +658,9 @@ class MainActivity : ComponentActivity() {
             }
 
             // ---- 姓名 / 职位 / 状态 ----
-            drawText(canvas, w / 2f, 178f * s, nameEt.text.toString().ifEmpty { "姓名" },
-                cWhite, 24f, true, android.graphics.Paint.Align.CENTER)
-            drawText(canvas, w / 2f, 212f * s, titleEt.text.toString(), cGray, 14f, false,
+            drawText(canvas, w / 2f, 164f * s, nameEt.text.toString().ifEmpty { "姓名" },
+                cWhite, 30f, true, android.graphics.Paint.Align.CENTER)
+            drawText(canvas, w / 2f, 198f * s, titleEt.text.toString(), cGray, 14f, false,
                 android.graphics.Paint.Align.CENTER)
             // 状态:色点 + 文字
             val st = statusEt.text.toString()
@@ -674,8 +674,8 @@ class MainActivity : ComponentActivity() {
                 val totalW = dotR * 2 + gap + stW
                 val stX = (w - totalW) / 2f
                 paint.color = cAccent
-                canvas.drawCircle(stX + dotR, 244f * s + stSize / 2f, dotR, paint)
-                drawText(canvas, stX + dotR * 2 + gap, 244f * s + stSize, st,
+                canvas.drawCircle(stX + dotR, 230f * s + stSize / 2f, dotR, paint)
+                drawText(canvas, stX + dotR * 2 + gap, 230f * s + stSize, st,
                     cAccent, 14f, false, android.graphics.Paint.Align.LEFT)
             }
 

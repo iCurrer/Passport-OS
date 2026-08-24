@@ -2335,6 +2335,43 @@ Git Commit：
 
 ---
 
+### 后续 UI 优化：姓名 30px 字库 + HOME/PROFILE 排版（§31 之后实施）
+
+背景：用户反馈姓名太小，且 PROFILE 去掉链接后信息变少、排版空。决定把主字库从 24px 提升到 **30px**，并重排 HOME 头像与 PROFILE 信息页。
+
+- **字库**：`badge_font_gb2312` 全量 GB2312 从 24px → **30px**（6763 字，bitmap_format=1 不变）。App 分区剩 17% free。
+  - 影响范围：姓名(home/profile)、STATUS 大字、GAMES/TOOLS/SETTINGS 入口标题、游戏 GAME OVER/分数 均变大。
+- **HOME 头像**：用户头像 80×80 → 显示放大到 **90×90**，并**下移**：头像顶到 Header 分隔线(y=34) 的距离 = 头像底到姓名顶的距离 = 20（上下等距）。坐标：头像 y54..144、姓名 y164(30px)、职位 y198、状态 y230。
+- **PROFILE 重排**（无头像信息页）：改为**固定坐标**排布：姓名 y56(30px) → 职位 y110 → 分隔线 y142 → 状态 y176 → 简介 y212。
+- **安卓预览同步**：`MainActivity.kt` 的 PassportPreviewView 头像 90、姓名 30px、坐标同步；列表页入口标题随字库变大。
+
+改动文件：
+
+- `main/assets/badge_font_gb2312.c`（24→30px 重新生成）
+- `main/assets/badge_fonts.h`、`scripts/gen_badge_fonts.py`（默认字号 24→30，输出路径修正到 assets/）
+- `main/apps/home/home.c`（头像 90px + 上下等距坐标 + 姓名/职位/状态 y 调整）
+- `main/apps/profile/profile.c`（固定坐标信息页排版）
+- `android_app/.../MainActivity.kt`（预览头像/字号/坐标同步）
+- `docs/UI_DESIGN_SPEC.md`（HOME/PROFILE/STATUS/字号表同步）
+
+验证：
+
+```text
+idf.py build
+结果：PASS（exit 0，无代码告警；.bin = 0x356310，App 分区剩 17% free）
+UI: STATIC REVIEW PASS —— HOME 头像54..144 上下等距、姓名164..194、职位198、状态230..244<271
+     PROFILE 姓名56..86、职位110、分隔线142、状态176、简介212..226<271
+Function: 无逻辑改动
+Hardware: 真机已烧录 COM5（30px + 90px 头像 + PROFILE 重排），用户反馈"还行"，待最终确认
+```
+
+Git Commit：
+
+```text
+xxx；（提交后回填）
+```
+
+---
 ### 后续 UX 修复：列表页「入口态→菜单态→子屏」三态导航（§31 之后实施）
 
 背景与问题：早期 TOOLS/GAMES/SETTINGS（6/7/8 页）把短按 UP/DOWN 全部用于列表内选择，导致这几页无法短按翻页（TASK-08/09/13 已标注为已知取舍）。用户反馈需恢复短按翻页，同时保留进入菜单的操作。

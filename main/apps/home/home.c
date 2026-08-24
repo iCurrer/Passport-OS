@@ -27,17 +27,22 @@ static ds_dots_t        s_dots;
 static uint8_t         *s_avatar_buf;   // 用户头像 RGB565 缓冲
 static lv_image_dsc_t   s_avatar_dsc;   // 头像 image 描述符(静态,需驻留)
 
-// 头像缩放因子:现有素材 80x157 → 等比缩到 约56x110(256=100%)。
-#define HOME_AVATAR_SCALE  180
+// 头像缩放因子:现有素材 80x157 → 等比缩到约 46x90(256=100%)。
+#define HOME_AVATAR_SCALE  147
 
-// 布局 y(Content 36-271)
-#define HOME_AVATAR_Y    56
-#define HOME_NAME_Y      178
-#define HOME_TITLE_Y     212
-#define HOME_STATUS_Y    244
+// 用户头像显示尺寸(80x80 原图放大到 90x90):放大因子 90/80=1.125 → 288/256
+#define HOME_AVATAR_DISP   90
+#define HOME_AVATAR_ZOOM   288
+
+// 布局 y(Content 36-271)。头像 90px 垂直居中于 Header 分隔线(34)与姓名之间:
+//   头像顶 54(顶到 34 间距 20) → 头像底 144 → 姓名顶 164(间距 20) → 职位 198 → 状态 230
+#define HOME_AVATAR_Y    54
+#define HOME_NAME_Y      164
+#define HOME_TITLE_Y     198
+#define HOME_STATUS_Y    230
 #define HOME_STATUS_GAP  12     // 状态色点到文字的水平间距
 
-// 放置用户头像(80x80 RGB565,从 /avatar.bin 读入)。成功返回 true。
+// 放置用户头像(80x80 RGB565,从 /avatar.bin 读入),放大到 90x90 显示。成功返回 true。
 static bool place_user_avatar(lv_obj_t *scr)
 {
     if (!avatar_storage_has()) return false;
@@ -56,11 +61,13 @@ static bool place_user_avatar(lv_obj_t *scr)
     s_avatar_dsc.data         = s_avatar_buf;
     lv_obj_t *img = lv_image_create(scr);
     lv_image_set_src(img, &s_avatar_dsc);
+    lv_image_set_scale(img, HOME_AVATAR_ZOOM);          // 80→90 放大
+    lv_obj_set_size(img, HOME_AVATAR_DISP, HOME_AVATAR_DISP);
     lv_obj_align(img, LV_ALIGN_TOP_MID, 0, HOME_AVATAR_Y);
     return true;
 }
 
-// 回退:内置全身素材等比缩小居中。
+// 回退:内置全身素材等比缩小居中(高度对齐 90)。
 static void place_sprite_avatar(lv_obj_t *scr)
 {
     lv_obj_t *avatar = lv_image_create(scr);

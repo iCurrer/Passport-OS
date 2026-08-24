@@ -10,8 +10,8 @@ ASCII 0x20-0x7E + GB2312 6763 常用汉字。
     python scripts/gen_badge_fonts.py
 
 产物:
-    main/badge_font_gb2312.c        (24px, 姓名)
-    main/badge_font_gb2312_small.c  (14px, 顶部/职位/状态)
+    main/assets/badge_font_gb2312.c        (30px, 姓名/大字)
+    main/assets/badge_font_gb2312_small.c  (14px, 顶部/职位/状态)
 """
 import os
 import subprocess
@@ -54,7 +54,7 @@ const { run } = require('__LV_FONT_CONV_CLI__');
 const sym = fs.readFileSync('__CHARS_FILE__', 'utf8').trim();
 const otf = '__OTF__';
 const jobs = [
-  { size: 24, name: 'badge_font_gb2312', out: '__OUT_24__' },
+  { size: 30, name: 'badge_font_gb2312', out: '__OUT_24__' },
   { size: 14, name: 'badge_font_gb2312_small', out: '__OUT_14__' },
 ];
 (async () => {
@@ -83,8 +83,8 @@ const jobs = [
           .replace('__LV_FONT_CONV_CLI__', q(LV_FONT_CONV_CLI))
           .replace('__CHARS_FILE__', q(chars_file))
           .replace('__OTF__', q(OTF))
-          .replace('__OUT_24__', q(os.path.join(ROOT, 'main', 'badge_font_gb2312.c')))
-          .replace('__OUT_14__', q(os.path.join(ROOT, 'main', 'badge_font_gb2312_small.c'))))
+          .replace('__OUT_24__', q(os.path.join(ROOT, 'main', 'assets', 'badge_font_gb2312.c')))
+          .replace('__OUT_14__', q(os.path.join(ROOT, 'main', 'assets', 'badge_font_gb2312_small.c'))))
 
     js_file = os.path.join(tempfile.gettempdir(), "gen_fonts.js")
     with open(js_file, "w", encoding="utf-8") as f:

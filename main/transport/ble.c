@@ -154,15 +154,10 @@ static void host_task(void *param)
 
 void ble_init(void)
 {
-    // 从 NVS 读取上次保存的蓝牙开关状态(默认开启)
-    nvs_handle_t nvs;
-    if (nvs_open(NVS_NS_CFG, NVS_READONLY, &nvs) == ESP_OK) {
-        uint8_t v = 1;
-        if (nvs_get_u8(nvs, NVS_KEY_BLE, &v) == ESP_OK) {
-            s_ble_enabled = (v != 0);
-        }
-        nvs_close(nvs);
-    }
+    // ⚠ 临时开发/联调覆盖:当前无设置页开关(TASK-13 才实现 BLE 开关),故开机强制开启 BLE,
+    //   以便手机连接测试。最终 V2 低功耗行为为"BLE 默认关 + 设置页开启,同步完即关并深睡",
+    //   届时恢复读取 NVS ble_on(并配合 TASK-13 的开关 UI)。
+    s_ble_enabled = true;
     ESP_LOGI(TAG, "BLE 开关状态=%s", s_ble_enabled ? "开" : "关");
 
     if (nimble_port_init() != ESP_OK) {

@@ -1997,6 +1997,14 @@ Git Commit：
 - 需在有 Android SDK + JDK 的环境跑 `gradlew assembleDebug` 编译,并在真机安装验证预览与 BLE 新字段读写。
 - 预览中电量为静态占位"86%",未接真实电量;头像为灰块占位(真头像流程在 TASK-12)。
 
+## 当前开发备注（非任务清单）
+
+### 临时 BLE 覆盖（开发/联调）
+- **现象**：开机后 BLE 未广播、手机无法连接。根因：NVS `ble_on=0`（旧固件设置页关闭过），而 ble_init 会读取该值关闭广播。
+- **处理（临时）**：`main/transport/ble.c` ble_init 暂时强制 `s_ble_enabled = true`（开机即广播），便于手机连接联调。
+- **⚠ 最终 V2 行为**：BLE 默认关 + 设置页开关（TASK-13），同步完即关并深睡。届时恢复读取 NVS `ble_on` 并配合 TASK-13 的开关 UI。
+- 验证：boot 日志 `NimBLE: GAP procedure initiated: advertise` + `BLE 已初始化并开始广播` 已确认。
+
 ---
 
 # TASK-12：Avatar

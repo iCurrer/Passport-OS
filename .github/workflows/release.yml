@@ -20,14 +20,20 @@ jobs:
           target: esp32c3
           path: "."
           command: "idf.py build"
-      - name: Upload firmware binaries as artifact
+      - name: Merge into single full 8MB image
+        run: |
+          # 把 bootloader + partition-table + app 合并成一个可直接烧录的完整 8MB 固件
+          esptool.py --chip esp32c3 merge_bin \
+            --flash_mode dio --flash_freq 80m --flash_size 8MB \
+            -o FoloToy-AI-Passport-8M.bin \
+            0x0 build/bootloader/bootloader.bin \
+            0x8000 build/partition_table/partition-table.bin \
+            0x10000 build/FoloToy-AI-Passport.bin
+      - name: Upload merged firmware as artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: |
-            build/bootloader/bootloader.bin
-            build/partition_table/partition-table.bin
-            build/FoloToy-AI-Passport.bin
+          path: FoloToy-AI-Passport-8M.bin
 
   android:
     name: Build Android app (debug APK)
@@ -80,10 +86,8 @@ jobs:
           VER="${TAG#v}"
           ZIP="Passport-OS-V2-${VER}.zip"
           mkdir -p release
-          # 用 find 定位文件（兼容 download-artifact@v4 的目录结构），找不到则报错并列出已下载内容
-          cp "$(find artifacts -name bootloader.bin | head -n1)" release/
-          cp "$(find artifacts -name partition-table.bin | head -n1)" release/
-          cp "$(find artifacts -name 'FoloToy-AI-Passport.bin' | head -n1)" release/
+          # 收集合并固件(单个完整 8M bin) + 安卓 APK;用 find 定位,兼容 download-artifact@v4 目录结构
+          cp "$(find artifacts -name 'FoloToy-AI-Passport-8M.bin' | head -n1)" release/
           cp "$(find artifacts -name app-debug.apk | head -n1)" release/
           (cd release && zip -r "../${ZIP}" .)
           # 显式指定仓库(避免 gh 依赖 git 上下文失败),并确保在仓库根执行上传

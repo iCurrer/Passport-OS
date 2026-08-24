@@ -1,15 +1,30 @@
-# Passport OS V2 — 个人智能电子工牌固件
+<p align="center">
+  <img src="docs/assets/passport-os-v2.jpg" alt="Passport OS V2" width="180" style="border-radius:12px"/>
+</p>
 
-简体中文 | [English](README.en.md)
+<h1 align="center">Passport OS V2</h1>
+
+<h3 align="center">低功耗个人智能电子工牌固件 · ESP32-C3</h3>
+
+<p align="center">
+  <em>个人身份 · 上下翻页 · BLE 自定义 · 头像同步 · 深色极简</em>
+</p>
+
+<p align="center">
+  <a href="#"><img alt="版本" src="https://img.shields.io/badge/版本-v2.0.0-4CD964.svg"/></a>
+  <a href="LICENSE"><img alt="协议" src="https://img.shields.io/badge/license-MIT-blue.svg"/></a>
+  <a href="README.en.md"><img alt="双语" src="https://img.shields.io/badge/docs-中文%20%7C%20English-8A8A8A.svg"/></a>
+  <a href="#"><img alt="芯片" src="https://img.shields.io/badge/MCU-ESP32--C3-E7352C.svg"/></a>
+  <a href="#"><img alt="屏幕" src="https://img.shields.io/badge/Display-240%C3%97320%20ST7789-FF9F0A.svg"/></a>
+  <a href="#"><img alt="蓝牙" src="https://img.shields.io/badge/BLE-NimBLE%20GATT-4CA0D9.svg"/></a>
+  <a href="#"><img alt="SDK" src="https://img.shields.io/badge/ESP--IDF-5.5-green.svg"/></a>
+  <a href="#"><img alt="LVGL" src="https://img.shields.io/badge/LVGL-9.5-purple.svg"/></a>
+</p>
 
 > 这是一套基于 **ESP32-C3** 的**低功耗个人智能工牌**固件（原 FoloToy AI Passport 渐进式产品化改造而来）。
 > 它以「**上下翻页**」为核心交互，把一块 240×320 屏幕变成你的电子身份名片——展示姓名、职位、状态、二维码，支持头像与个人资料经手机 BLE 修改，化繁为简、深色极简、单屏极低功耗。
 
-<p align="center">
-  <img src="docs/assets/passport-os-v2.jpg" alt="Passport OS V2 展示图" width="320"/>
-  <br/>
-  <em>Passport OS V2 — 个人智能电子工牌实机展示</em>
-</p>
+简体中文 | [English](README.en.md)
 
 ---
 

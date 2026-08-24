@@ -2095,7 +2095,7 @@ Git Commit：
 
 问题：
 
-- 实机上传全链路需手机 App 实现头像裁剪→RGB565→分块上传(Android 端尚未实现,需后续/在有 SDK 环境补)。
+- 实机上传全链路需手机 App 实现头像裁剪→RGB565→分块上传(Android 端已在 `MainActivity.kt` 实现图库选图/居中裁剪/缩放 80x80/转 RGB565 小端/CRC32/分块上传;待在有 Android SDK 环境编译 APK 实机验证)。
 - 上传缓冲 malloc 12,800B(无 PSRAM)在联调时瞬时占用;已限上限并传输结束即 free。
 - 分区表新增 storage 分区,需与固件一起烧录(partition-table.bin 已包含)。
 

@@ -8,6 +8,8 @@ import android.bluetooth.le.ScanResult
 import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -23,6 +25,7 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.textfield.TextInputLayout
 import com.google.android.material.chip.Chip
 import java.util.UUID
+import java.util.zip.CRC32
 
 /**
  * FoloToy Badge 安卓端:手动扫描连接名牌,写入/读取 姓名/顶部文字/职位/状态/简介/网站/GitHub。
@@ -41,7 +44,13 @@ class MainActivity : ComponentActivity() {
         private val CHR_BIO = UUID.fromString("0000FFE5-0000-1000-8000-00805F9B34FB")
         private val CHR_WEBSITE = UUID.fromString("0000FFE6-0000-1000-8000-00805F9B34FB")
         private val CHR_GITHUB = UUID.fromString("0000FFE7-0000-1000-8000-00805F9B34FB")
+        private val CHR_AV_CTRL = UUID.fromString("0000FFE8-0000-1000-8000-00805F9B34FB")
+        private val CHR_AV_DATA = UUID.fromString("0000FFE9-0000-1000-8000-00805F9B34FB")
         private const val DEVICE_NAME = "FoloToy-Badge"
+        private const val AV_W = 80
+        private const val AV_H = 80
+        private const val AV_SIZE = AV_W * AV_H * 2   // 12,800 字节 RGB565
+        private const val AV_CHUNK = 244               // BLE 分块(对齐固件 AV_DATA)
     }
 
     private val bluetoothManager: BluetoothManager by lazy {
@@ -54,9 +63,9 @@ class MainActivity : ComponentActivity() {
     private var scanCallback: ScanCallback? = null
     private var targetDevice: BluetoothDevice? = null
 
-    // GATT 读写必须串行:一次一个,等回调完成再下一个。
+    // GATT 读写必须串行:一次一个,等回调完成再下一个。值用字节数组(支持原始二进制)。
     private val readQueue = mutableListOf<BluetoothGattCharacteristic>()
-    private val writeQueue = mutableListOf<Pair<BluetoothGattCharacteristic, String>>()
+    private val writeQueue = mutableListOf<Pair<BluetoothGattCharacteristic, ByteArray>>()
 
     // ---- UI ----
     private lateinit var statusChip: Chip
@@ -71,6 +80,12 @@ class MainActivity : ComponentActivity() {
     private lateinit var readBtn: MaterialButton
     private lateinit var writeBtn: MaterialButton
     private lateinit var passportPreview: PassportPreviewView
+
+    // 图库选头像
+    private val pickAvatarLauncher =
+        registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) handleAvatarUri(uri)
+        }
 
     // 请求权限结果
     private val permLauncher = registerForActivityResult(
@@ -251,6 +266,16 @@ class MainActivity : ComponentActivity() {
             ).apply { topMargin = dp(8) }
         }
         previewColumn.addView(passportPreview)
+        previewColumn.addView(MaterialButton(this).apply {
+            text = "选择图片并上传头像"
+            textSize = 14f
+            setOnClickListener { pickAvatarLauncher.launch("image/*") }
+            strokeWidth = 0
+            cornerRadius = dp(20)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44)
+            ).apply { topMargin = dp(8) }
+        })
         previewCard.addView(previewColumn)
         root.addView(previewCard)
 
@@ -515,7 +540,7 @@ class MainActivity : ComponentActivity() {
             CHR_GITHUB to githubEt.text.toString(),
         )
         for ((uuid, value) in fields) {
-            svc.getCharacteristic(uuid)?.let { writeQueue.add(it to value) }
+            svc.getCharacteristic(uuid)?.let { writeQueue.add(it to value.toByteArray(Charsets.UTF_8)) }
         }
         writeNext()
     }
@@ -527,8 +552,69 @@ class MainActivity : ComponentActivity() {
             setConnectionState(ConnectionState.CONNECTED, "写入完成")
             return
         }
-        g.writeCharacteristic(item.first, item.second.toByteArray(Charsets.UTF_8),
+        g.writeCharacteristic(item.first, item.second,
             BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+    }
+
+    // ---------- 头像处理 + 上传 ----------
+    private fun handleAvatarUri(uri: android.net.Uri) {
+        val bmp = try {
+            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+        } catch (_: Exception) { null }
+        if (bmp == null) { setConnectionState(ConnectionState.ERROR, "图片解码失败"); return }
+        try {
+            val rgb = toRgb565Le(centerCropSquare(bmp))
+            bmp.recycle()
+            uploadAvatar(rgb)
+        } catch (e: Exception) {
+            setConnectionState(ConnectionState.ERROR, "头像处理失败")
+        }
+    }
+
+    // 居中裁剪成正方形
+    private fun centerCropSquare(bmp: Bitmap): Bitmap {
+        val s = minOf(bmp.width, bmp.height)
+        val x = (bmp.width - s) / 2
+        val y = (bmp.height - s) / 2
+        return Bitmap.createBitmap(bmp, x, y, s, s)
+    }
+
+    // 缩放 + 转 80x80 RGB565(小端字节序,与固件 LV_COLOR_FORMAT_RGB565 一致)
+    private fun toRgb565Le(bmp: Bitmap): ByteArray {
+        val scaled = Bitmap.createScaledBitmap(bmp, AV_W, AV_H, true)
+        val px = IntArray(AV_W * AV_H)
+        scaled.getPixels(px, 0, AV_W, 0, 0, AV_W, AV_H)
+        scaled.recycle()
+        val out = ByteArray(AV_SIZE)
+        var o = 0
+        for (v in px) {
+            val r = (v shr 16) and 0xFF
+            val g = (v shr 8) and 0xFF
+            val b = v and 0xFF
+            val c = ((r shr 3) shl 11) or ((g shr 2) shl 5) or (b shr 3)
+            out[o++] = (c and 0xFF).toByte()          // 低字节
+            out[o++] = ((c shr 8) and 0xFF).toByte()  // 高字节
+        }
+        return out
+    }
+
+    // 通过 BLE 上传:写控制 "START <size> <crc>",再分块写数据(与固件 TASK-12 协议一致)
+    @SuppressLint("MissingPermission")
+    private fun uploadAvatar(bytes: ByteArray) {
+        val g = gatt ?: run { setConnectionState(ConnectionState.ERROR, "未连接"); return }
+        val svc = g.getService(SVC) ?: run { setConnectionState(ConnectionState.ERROR, "未找到服务"); return }
+        val ctrl = svc.getCharacteristic(CHR_AV_CTRL) ?: run { setConnectionState(ConnectionState.ERROR, "无头像服务"); return }
+        val data = svc.getCharacteristic(CHR_AV_DATA) ?: run { setConnectionState(ConnectionState.ERROR, "无头像服务"); return }
+        if (bytes.size != AV_SIZE) { setConnectionState(ConnectionState.ERROR, "头像尺寸错误"); return }
+
+        val crc = CRC32().also { it.update(bytes) }.value
+        writeQueue.clear()
+        writeQueue.add(ctrl to "START $AV_SIZE $crc".toByteArray(Charsets.UTF_8))
+        for (i in bytes.indices step AV_CHUNK) {
+            writeQueue.add(data to bytes.copyOfRange(i, minOf(i + AV_CHUNK, bytes.size)))
+        }
+        setConnectionState(ConnectionState.CONNECTED, "上传头像...")
+        writeNext()
     }
 
     // ---------- App 退出:关闭蓝牙 ----------

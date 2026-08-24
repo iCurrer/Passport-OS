@@ -43,10 +43,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK
-        uses: actions/setup-android@v4
-        with:
-          gradle-version: wrapper
+      - name: Set up Android SDK (accept licenses)
+        uses: android-actions/setup-android@v3
       - name: Build debug APK
         run: ./gradlew assembleDebug
       - name: Upload debug APK as artifact

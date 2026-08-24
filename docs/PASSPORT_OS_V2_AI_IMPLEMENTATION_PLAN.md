@@ -1768,18 +1768,78 @@ Git Commit：
 
 # TASK-09：GAMES
 
-# TASK-09：GAMES
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-09 验证记录
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（纯逻辑审查）
+- [ ] Hardware（已烧录；GAMES 页与 CATCH 游戏实机未确认）
+- [x] Commit
+
+修改文件（`main/` 应用层;含对现有 game.c 的适配;未改 BSP、未改 ui 层）：
+
+- 新增 `main/apps/games/games.h`、`main/apps/games/games.c`（V2 GAMES 列表页 + CATCH 接入）
+- 修改 `main/game/game.h`、`main/game/game.c`（适配 Router:移除 badge.h 依赖;game_key 返回结果且不再自加锁,由调用方持锁）
+- 修改 `main/app/app_router.c`（GAMES 槽位用 games_enter/exit/games_key）
+- 修改 `main/CMakeLists.txt`（加入 apps/games）
+
+明细：
+
+- GAMES 列表：REACTION/MEMORY/MORSE/**CATCH**;UP/DOWN 选择(高亮同 TOOLS),OK 进入。
+- **CATCH 接入现有 game.c(Pixel Catcher)**：game_key 改为返回 `GAME_KEY_CONSUMED/EXITED/NONE`,去掉内部锁(符合 Router 委托契约);游戏结束 OK → `game_exit()` 并返回 EXITED,GAMES 页重建菜单。
+- 其余游戏 COMING SOON 占位。
+- 全局语义:短按页面局部优先;长按全局(OK/UP 回 HOME)。
+
+UI 验证（静态坐标审查，Content 36–271）：
+
+- [x] 列表 4 行 y56..200(步进 48,行高 44) —— 末行 244 <271,不触 Footer
+- [x] 选中高亮(卡片底/强调文字)与未选中(次要色)
+- [ ] 实机 GAMES 列表高亮移动与 CATCH 游戏画面（未实机确认）
+
+功能验证（纯逻辑审查）：
+
+- [x] GAMES 选择 UP/DOWN 环绕(复用 TOOLS 自检逻辑)
+- [x] game_key 契约:消耗/退出/未消费;GAMES 页在 EXITED 后重建菜单
+- [x] games_exit 先 game_exit(停游戏循环)再删屏(红线)
+- [ ] 实机 CATCH 操作(UP/DOWN 移篮、接宝石)与 Game Over 返回菜单（未实机确认）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（game.c 适配 + games.c 编译通过;.bin=0x2e54d0,App 分区剩 28%）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- game.c 游戏屏仍用旧磨砂绿主题色(非 V2 纯黑),为遗留游戏模块;如需统一配色可后续调整。
+- 列表页内 UP/DOWN 短按用于选择,离开用长按(与 TOOLS 一致)。
+- REACTION/MEMORY/MORSE 为占位,后续迭代实现。
 
 ---
+
+# TASK-10：PROFILE SYNC / BLE 数据
 
 # TASK-10：BLE Profile V2
 

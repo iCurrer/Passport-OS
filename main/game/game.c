@@ -8,7 +8,6 @@
 //   - 游戏循环用 lv_timer(30fps,跑在 LVGL 任务,已持锁)。
 //   - game_key 从 button 任务经 badge_key 转发,内部加锁。
 #include "game.h"
-#include "badge.h"              // g_badge_sub, badge_enter
 #include "ui_pixel.h"
 #include "badge_fonts.h"
 #include "bsp_display.h"
@@ -285,30 +284,21 @@ void game_exit(void)
     ESP_LOGI(TAG, "game exited");
 }
 
-void game_key(bsp_btn_t btn, bsp_btn_ev_t ev)
+game_key_result_t game_key(bsp_btn_t btn, bsp_btn_ev_t ev)
 {
-    if (!bsp_lvgl_lock(300)) return;
+    // 须由调用方持 LVGL 锁(Router 委托契约)。
 
-    // Game Over:OK 短按返回名牌(在锁内,含 badge_enter)
+    // Game Over:OK 短按结束游戏(调用方重建菜单);其它键吞掉
     if (s.over) {
         if (ev == BSP_BTN_CLICK && btn == BSP_BTN_OK) {
-            g_badge_sub = BADGE_SUB_NONE;
             game_exit();
-            badge_enter();
-            bsp_lvgl_unlock();
-            return;
+            return GAME_KEY_EXITED;
         }
-        bsp_lvgl_unlock();
-        return;
+        return GAME_KEY_CONSUMED;
     }
-
-    // (长按 OK 返回名牌由 badge.c 全局处理,这里不再重复)
 
     // 游戏操作:仅响应 CLICK
-    if (ev != BSP_BTN_CLICK) {
-        bsp_lvgl_unlock();
-        return;
-    }
+    if (ev != BSP_BTN_CLICK) return GAME_KEY_NONE;
 
     switch (btn) {
     case BSP_BTN_UP:   move_basket(-BASKET_SPEED); break;
@@ -316,6 +306,5 @@ void game_key(bsp_btn_t btn, bsp_btn_ev_t ev)
     case BSP_BTN_OK:   /* OK 短按暂保留,未来可做特殊技能 */ break;
     default: break;
     }
-
-    bsp_lvgl_unlock();
+    return GAME_KEY_CONSUMED;
 }

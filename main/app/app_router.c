@@ -17,6 +17,7 @@
 #include "cards.h"            // CARDS/QR 页真实渲染
 #include "dashboard.h"        // DASHBOARD 页真实渲染
 #include "tools.h"            // TOOLS 页真实渲染 + 页内按键(tools_key)
+#include "games.h"            // GAMES 页真实渲染 + 页内按键(games_key)
 #include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
 #include "bsp_display.h"      // bsp_lvgl_lock / unlock
@@ -113,7 +114,7 @@ static const app_page_render_t s_pages[APP_PAGE_COUNT] = {
     { cards_enter,      cards_exit,      NULL,         NULL },          // CARDS
     { dashboard_enter,  dashboard_exit,  NULL,         NULL },          // DASHBOARD
     { tools_enter,      tools_exit,      NULL,         tools_key },     // TOOLS
-    { app_ph_enter,     app_ph_exit,     NULL,         NULL },          // GAMES
+    { games_enter,      games_exit,      NULL,         games_key },     // GAMES
     { app_ph_enter,     app_ph_exit,     NULL,         NULL },          // SETTINGS
 };
 

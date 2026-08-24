@@ -1,182 +1,227 @@
-# FoloToy AI Passport — Matte-Black Digital Badge
+# Passport OS V2 — 个人智能电子工牌固件
 
-[简体中文](README.zh_CN.md) | English
+简体中文 | [English](README.en.md)
 
-Firmware for the **FoloToy AI Passport** that turns the 240×320 display into a **matte-black digital name badge**. On power-up it shows a clean personal badge — name, title, status, and battery — in a restrained, high-contrast layout, and it can be re-customized over Bluetooth without re-flashing. A bottom dock launches a built-in **pixel game** and a **settings page** (sleep timer, Bluetooth on/off, firmware version). To save power it auto deep-sleeps after a configurable idle timeout (default 7 minutes) and wakes on any button press.
+> 这是一套基于 **ESP32-C3** 的**低功耗个人智能工牌**固件（原 FoloToy AI Passport 渐进式产品化改造而来）。
+> 它以「**上下翻页**」为核心交互，把一块 240×320 屏幕变成你的电子身份名片——展示姓名、职位、状态、二维码，支持头像与个人资料经手机 BLE 修改，化繁为简、深色极简、单屏极低功耗。
 
-This repo is a running, hardware-validated baseline. The firmware follows a clean **three-layer architecture**: hardware abstraction (`components/bsp`), reusable UI primitives (`components/ui`), and application logic (`main/` — `badge/`, `game/`, `settings/`, `transport/`, `assets/`). See [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md) for the full hardware context and troubleshooting knowledge.
+---
 
-## Features
+## 快速认知
 
-- **Matte-black badge UI** with a clear information hierarchy: a large name (24 px, white) as the primary element, smaller title/status (14 px) as secondary, and a single accent color (`0x4CD964` green) used sparingly for the status dot and dock selection.
-- **Three-button interaction** — `UP`/`DOWN` navigate the bottom dock; `OK` (short) opens the selected page, `OK` (long) returns to the badge.
-- **Pixel game** — a "catch the gems, dodge the bombs" minigame in the dock; `UP`/`DOWN` move the basket, difficulty ramps up as the score climbs.
-- **Settings page** — sleep timeout (30 s / 1 / 2 / 5 min / never), Bluetooth on/off (persisted to NVS), and firmware version.
-- **BLE customization (NimBLE)** — a phone app can change the name / top bar / title / status live via GATT, no re-flash needed.
-- **NVS persistence** — all four customizable fields, the sleep timeout, and the Bluetooth state survive power loss.
-- **Deep-sleep power saving** — auto deep-sleep after a configurable idle timeout (default 7 min), wake on any button press (GPIO0 low-level wake).
-- **Battery display** — CW2017 state-of-charge, turns orange below 20% and red below 10%; degrades to `--%` when the fuel gauge is absent.
+| 项目 | 说明 |
+| --- | --- |
+| 主控 | ESP32-C3（8 MB Flash，**无 PSRAM**，内部 RAM 有限） |
+| 屏幕 | ST7789P3，240×320 竖屏 RGB565，SPI2 @ 40 MHz |
+| 交互 | 三按键（`UP` / `DOWN` / `OK`），非触摸，共用 GPIO0 ADC 分压 |
+| 音频 | ES8311（I2S0 全双工），与本项目主体 UI 无关 |
+| 电量 | CW2017 电量计（运行时可缺省，缺失时显示 `--%`） |
+| SDK | ESP-IDF 5.5.x，LVGL 9.5 |
+| 系统 | **Vertical Page Navigation** —— 8 页循环上下翻页，App Router 统一管理全局按键 |
 
-## On-screen layout
+---
+
+## 核心交互：上下翻页
+
+整个系统不是手机 App 图标网格，而是**纵向翻页**：
 
 ```text
-┌─────────────────────────────┐
-│ FoloToy            ▯ 96%    │  top bar: brand + battery
-├─────────────────────────────┤
-│             ┌──────────┐    │
-│             │          │    │
-│  [avatar]   │ Zhang San│    │  name  (24 px, white, primary)
-│             │ ──────── │    │
-│             │ 豆包大学  │    │  title (14 px, gray)
-│             │ ● 自由    │    │  status (14 px, accent + dot)
-│             └──────────┘    │
-├─────────────────────────────┤
-│      ▮        │              │  bottom dock (UP/DOWN to switch)
-└─────────────────────────────┘
+         UP / DOWN          UP / DOWN
+              ↑                   ↑
+     ┌───────────────┐   ┌───────────────┐
+     │   HOME        │   │  PROFILE      │  ... 循环至 HOME
+     └───────────────┘   └───────────────┘
 ```
 
-- Header: brand (left) + battery bar and percent (right), thin divider below.
-- Body: pixel avatar on the left, vertically centered against an information column on the right — all left-aligned on one reference line.
-- Bottom dock: two live entries (game icon + settings icon); the selected one gets a 3 px accent indicator on top.
+### 三按键语义（App Router 统一，禁止页面各自管理全局按键）
 
-## Three-button interaction
-
-| Button | Badge (home) | Game | Settings |
-| --- | --- | --- | --- |
-| `UP` / `DOWN` | Switch dock selection | Move the basket left / right | Move selection up / down |
-| `OK` (short press) | Open the selected dock page | Reserved (future skill) | Change the selected item |
-| `OK` (long press) | — | Return to badge | Return to badge |
-
-## Dock pages
-
-### Pixel game
-
-A "catch the gems, dodge the bombs" minigame. Move the basket at the bottom with `UP`/`DOWN` to catch falling gems (green +10, blue +20, gold +50) while avoiding red bombs (−1 life). You start with 3 lives; the fall speed ramps up every 30 points. When lives run out, `OK` (short) restarts the badge view. Long-press `OK` quits back to the badge at any time.
-
-### Settings
-
-A list-style page: **sleep timeout** (30 s / 1 min / 2 min / 5 min / never), **Bluetooth on/off**, and **firmware version**. `UP`/`DOWN` move the selection, `OK` (short) toggles or cycles the selected value. The sleep timeout and Bluetooth state are persisted to NVS and survive reboot. Long-press `OK` returns to the badge.
-
-## BLE customization (NimBLE)
-
-- **Advertising name:** `FoloToy-Badge`
-- **GATT service:** `0xFFE0`
-- **Characteristics** (read + write), 16-bit UUIDs:
-
-| UUID | Field | NVS key |
+| 按键 | 短按 | 长按 |
 | --- | --- | --- |
-| `0xFFE1` | name | `name` |
-| `0xFFE2` | top bar text | `top` |
-| `0xFFE3` | title | `title` |
-| `0xFFE4` | status | `status` |
+| `UP` | 上一页（循环） | 直接返回 HOME |
+| `DOWN` | 下一页（循环） | 快速状态切换 |
+| `OK` | 进入 / 操作当前页 | 返回 HOME |
 
-Writing a characteristic updates the LVGL label and persists to NVS. The Android-side UUID is `0000FFEx-0000-1000-8000-00805F9B34FB`.
+页面列表页内（TOOLS / GAMES / SETTINGS）短按 **UP/DOWN** 优先用于选择、**OK** 进入/操作；长按始终走全局语义。
 
-## Hardware capability contract (BSP)
+### 8 个页面
 
-| Capability | Confirmed implementation | Application interface | Boundaries |
+```text
+PAGE 0  HOME        身份名片：头像 + 姓名 + 职位 + 状态
+PAGE 1  PROFILE     完整个人资料：姓名 / 职位 / 状态 / 简介 / 网站 / GitHub
+PAGE 2  STATUS      快速状态：AVAILABLE / FOCUS / BUSY / DND / OFFLINE
+PAGE 3  CARDS/QR    个人二维码（动态生成，内容取网站/GitHub）
+PAGE 4  DASHBOARD   仪表盘：运行时长(UPTIME) / FOCUS 会话计时 / BLE / WIFI（诚实数据，不造假时钟）
+PAGE 5  TOOLS       工具：TIMER / STOPWATCH / CALCULATOR / MORSE
+PAGE 6  GAMES       游戏：REACTION / MEMORY / MORSE / CATCH
+PAGE 7  SETTINGS    设置：BLE 开关 / 休眠超时 / 固件版本
+```
+
+每页底部都有 **Page Indicator**（`● ○ ○ ○ ○ ○ ○ ○`）标示当前所在页。
+
+---
+
+## 特性
+
+- **深色极简 UI**（V2 design-system）：黑底 `#000000`、主文字 `#FFFFFF`、强调色 `#4CD964`，低信息密度、高对比。
+- **上下翻页个人身份**：一键就能翻看自己的名片、状态、二维码与个人信息，无需进入复杂菜单。
+- **可自定义个人资料**：姓名、顶部文字、职位、状态、简介、网站、GitHub 全部存 **NVS**，经 BLE 修改后**掉电不丢**，**不编译进固件**。
+- **个人二维码**：CARDS 页动态生成 QR（依赖 `espressif/qrcode`），内容取自网站/ GitHub 字段。
+- **头像上传（BLE）**：手机端裁剪/缩放/转 RGB565 后经 BLE 分块上传，ESP32 接收 → CRC32 校验 → 保存到 SPIFFS（`/avatar.bin`，80×80 RGB565）→ 立即刷新显示。
+- **3 键导航**：全部按键逻辑由 **App Router** 统一分发，符合三键语义表。
+- **低功耗**：可配置闲置超时（30s/1m/2m/5m/never）自动 **Deep Sleep**，任意键唤醒；BLE 与 Wi-Fi 默认关，仅在需要同步时打开。
+- **电量显示**：CW2017 SOC，低于 20% 变橙、低于 10% 变红，电量计缺失时降级显示 `--%`。
+
+---
+
+## BLE 自定义与头像（NimBLE）
+
+- **广播名**：`FoloToy-Badge`；**GATT 服务** `0xFFE0`
+- **个人资料特性**（可读可写，16 位 UUID，写入即持久化 NVS）：
+
+| UUID | 字段 | NVS key |
+| --- | --- | --- |
+| `0xFFE1` | 姓名 | `name` |
+| `0xFFE2` | 顶部文字 | `top` |
+| `0xFFE3` | 职位 | `title` |
+| `0xFFE4` | 状态 | `status` |
+| `0xFFE5` | 简介 | `bio` |
+| `0xFFE6` | 网站 | `web` |
+| `0xFFE7` | GitHub | `git` |
+
+- **头像特性**（只写）：
+
+| UUID | 用途 |
+| --- | --- |
+| `0xFFE8` | `AV_CTRL` 头像控制：`START <size> <crc32>` 开始 / `CANCEL` 中止 |
+| `0xFFE9` | `AV_DATA` 头像数据（分块写入，收满后 CRC32 校验，匹配则保存） |
+
+> 安卓端 UUID 形如 `0000FFEx-0000-1000-8000-00805F9B34FB`。手机 App 见 [`android_app/`](android_app/)（含 240×320 实时预览与头像裁剪上传）。
+
+---
+
+## 硬件能力契约（BSP）
+
+| 能力 | 已确认实现 | 应用接口 | 边界 |
 | --- | --- | --- | --- |
-| Display | ST7789P3, 240 × 320 portrait RGB565, SPI2 @ 40 MHz; LEDC backlight | `bsp_display_*`, `bsp_lvgl_*` | ESP32-C3 has no PSRAM; single small DMA buffer; no MISO/touch/TE |
-| Input | `UP`/`DOWN`/`OK` share an ADC resistor ladder on GPIO0 | `bsp_button_init()`, `bsp_button_read_mv()` | Callbacks run in the button task; must not block |
-| Audio | ES8311, full-duplex PCM over I2S0 (play + record) | `bsp_audio_*` | PCM I/O is blocking → worker task; format change must close/reopen |
-| Battery | CW2017 SOC + voltage | `bsp_battery_*` | Optional at runtime; accuracy depends on cell/profile |
-| Shared bus | ES8311 & CW2017 share I2C0 | `bsp_i2c_*` | Reuse the BSP-owned bus; never create a second bus on the port |
-| Logging/flash | ESP32-C3 native USB Serial/JTAG | ESP-IDF console | GPIO18/19 for USB; UART0 TX on GPIO21 conflicts with backlight |
+| 显示 | ST7789P3，240 × 320 竖屏 RGB565，SPI2 @ 40 MHz；LEDC 背光 | `bsp_display_*`、`bsp_lvgl_*` | ESP32-C3 无 PSRAM；单小 DMA 缓冲；无 MISO/触摸/TE |
+| 输入 | `UP`/`DOWN`/`OK` 共用 GPIO0 ADC 电阻分压 | `bsp_button_init()`、`bsp_button_read_mv()` | 回调运行在按键任务中，不能阻塞 |
+| 音频 | ES8311，I2S0 全双工 PCM（与本项目主体 UI 无关） | `bsp_audio_*` | PCM 读写阻塞 → 工作任务；切格式必须 close/open |
+| 电池 | CW2017 SOC 与电压 | `bsp_battery_*` | 运行时可缺省；精度取决于电芯/profile |
+| 共享总线 | ES8311 与 CW2017 共用 I2C0 | `bsp_i2c_*` | 复用 BSP 持有的总线，不在同端口新建第二条总线 |
+| 日志/烧录 | ESP32-C3 原生 USB Serial/JTAG | ESP-IDF console | GPIO18/19 给 USB；UART0 TX GPIO21 与背光冲突 |
 
-All pins, addresses, panel parameters, and button voltage windows live only in [`components/bsp/include/bsp_pins.h`](components/bsp/include/bsp_pins.h).
+所有引脚、地址、面板参数与按键电压窗口只在 [`components/bsp/include/bsp_pins.h`](components/bsp/include/bsp_pins.h) 定义。
 
-## Chinese font note
+---
 
-- Name uses the 24 px full Chinese font; title/status/top bar use the 14 px full Chinese font.
-- The fonts (`main/assets/badge_font_gb2312.c`, `main/assets/badge_font_gb2312_small.c`) are generated for **LVGL 9.5** with `lv_font_conv` and cover **GB2312 (6763 common chars) + ASCII `0x20-0x7E`**. Fields written via BLE that use characters outside this set will render as missing glyphs.
-- ⚠️ LVGL 8 vs 9.5 changed `lv_font_t.bitmap_format` meaning; a font generated for LVGL 8 will show **all text blank** (layout/images/sound still fine). Regenerate with the matching `lv_font_conv` (`scripts/gen_badge_fonts.py`) and confirm `bitmap_format=1` (`COMPRESSED`) and that the ASCII range `0x20-0x7E` is included.
-- The original pre-regeneration font source lives in `_font_backup/` (not committed).
+## 中文字库说明
 
-## Build & flash
+- 姓名用 24px 全量中文字库；职位/状态/顶部等用 14px 全量中文字库（`main/assets/badge_font_gb2312.c` / `badge_font_gb2312_small.c`）。
+- 字库面向 **LVGL 9.5** 用 `lv_font_conv` 生成，覆盖 **GB2312（6763 常用字）+ ASCII `0x20-0x7E`**。通过 BLE 写入超出该字集的字符会显示为缺字。
+- ⚠️ LVGL 8 与 9.5 修改了 `lv_font_t.bitmap_format` 语义；用 LVGL 8 生成的字库在 9.5 下会**所有文字全空白**（布局/图片/声音仍正常）。请用 `scripts/gen_badge_fonts.py` 重新生成并确认 `bitmap_format=1` 且含 ASCII 范围。
 
-ESP-IDF 5.5.x (known env 5.5.3):
+---
+
+## 构建与烧录
+
+ESP-IDF 5.5.x：
 
 ```bash
-idf.py set-target esp32c3     # fresh checkout only
+idf.py set-target esp32c3     # 新 checkout 时才需要
 idf.py build
-idf.py -p COM5 flash          # replace COM5 with your port
+idf.py -p COM5 flash          # 把 COM5 换成你的端口
 idf.py -p COM5 monitor
 ```
 
-Custom partition table (`partitions.csv`) enlarges the app partition to 4 MB to hold the Chinese fonts.
+- 自定义分区表（`partitions.csv`）：`factory` app 4 MB（容纳中文字库）+ `storage`（SPIFFS 2 MB，存放 `/avatar.bin`），烧录时需连同分区表一起写入。
 
-## Acceptance checklist (on device)
+---
 
-- Stable startup logs via USB Serial/JTAG; no reboot loop or watchdog reset.
-- Display orientation, colors, edges, and backlight correct; accent color renders correctly.
-- `UP`/`DOWN` switch the dock selection (accent indicator follows); `OK` opens the selected page and long-press `OK` returns.
-- Pixel game: basket moves, gems/bombs score correctly, and Game Over / quit both return to the badge cleanly.
-- Settings: sleep timeout and Bluetooth toggle take effect and survive reboot; version string renders.
-- BLE: phone discovers `FoloToy-Badge`; reading/writing all four characteristics updates UI and survives reboot.
-- Battery shows a plausible SOC and degrades to `--%` when CW2017 is absent.
-- After the configured idle timeout (default 7 min) the badge deep-sleeps; any button wakes it.
-- Repeated page transitions / BLE writes do not leak tasks, objects, or heap.
-
-## Project structure
+## 项目结构
 
 ```text
-components/bsp/                  Hardware abstraction layer (BSP)
-├── include/bsp_pins.h            Single source of truth for pins, addresses, panel params
-├── include/bsp_display.h         Display & LVGL port API
-├── include/bsp_button.h          ADC three-button API
-├── include/bsp_audio.h           ES8311 codec API
-├── include/bsp_battery.h         CW2017 fuel gauge API
-├── include/bsp_i2c.h             Shared I2C0 bus API
-└── src/                          Driver implementations
+components/bsp/                  硬件抽象层（BSP）
+├── include/bsp_pins.h            引脚、地址、面板参数单一事实来源
+├── include/bsp_display.h         显示与 LVGL 端口 API
+├── include/bsp_button.h          ADC 三按键 API
+├── include/bsp_audio.h           ES8311 音频编解码 API
+├── include/bsp_battery.h         CW2017 电量计 API
+├── include/bsp_i2c.h             共享 I2C0 总线 API
+└── src/                          驱动实现
 
-components/ui/                    Reusable UI primitive library (shared across apps)
-├── include/ui_pixel.h            ui_block(), ui_label(), ui_header_bar(), ui_battery_pct()
+components/ui/                    可复用 UI 原语库（跨应用共享）
+├── include/ds_tokens.h           V2 配色/骨架/排版 token（深色极简规范）
+├── include/ds_widgets.h          设计系统原语（ds_header / ds_footer / ds_page_dots）
+├── src/ds_widgets.c
+├── include/ui_pixel.h            旧版像素原语（ui_block / ui_label / ui_header_bar / ui_battery_pct）
 └── src/ui_pixel.c
 
-main/                             Application layer
-├── main.c                        Entry point: init hardware → badge_enter()
-├── badge/                        Badge application (modular, layered)
-│   ├── badge.h                   Public API + badge_sub_t (sub-page routing state)
-│   ├── badge.c                   Facade: orchestrates submodules, routes keys to game/settings
-│   ├── badge_data.h / .c          Data model: NVS-backed field storage (name/top/title/status)
-│   ├── badge_power.h / .c         Power: configurable deep-sleep timer, wake-on-button
-│   ├── badge_ui.h / .c            LVGL layout: header bar, dock, field refresh
-│   └── badge_theme.h             Shared color / layout constants (theme)
-├── game/                         Pixel game page
-│   └── game.h / .c               "Catch the gems" minigame (enter / exit / key)
-├── settings/                     Settings page
-│   └── settings.h / .c           Sleep timeout, Bluetooth toggle, version (enter / exit / key)
-├── transport/                    Communication layer
-│   └── ble.h / .c                NimBLE GATT service (advertising + read/write characteristics)
-├── assets/                       Static resources
-│   ├── badge_fonts.h             Font declarations
-│   ├── badge_font_gb2312.c        24 px Chinese font (GB2312)
-│   ├── badge_font_gb2312_small.c  14 px Chinese font (GB2312)
-│   └── badge_avatar.h / .c        Pixel avatar image data
-└── CMakeLists.txt                Build: sources, include dirs, component dependencies
+main/                             应用层
+├── main.c                        入口：初始化硬件 → Router
+├── app/                          App Router（全局按键分发 + 8 页循环导航）
+│   ├── app_router.h / .c
+│   └── app_pages.h               8 页模型
+├── apps/                         各页面（每页独立模块）
+│   ├── home/  profile/  status/  cards/
+│   ├── dashboard/  tools/  games/  settings/
+│   └── ...
+├── badge/                        名牌数据/电源/UI（NVS 字段模型、深睡定时、唤醒）
+├── avatar/                       头像存储（SPIFFS 挂载 + /avatar.bin save/load）
+├── transport/ble.c               NimBLE GATT（资料 + 头像上传）
+├── game/                         像素游戏（CATCH）
+├── settings/                     旧设置（保留）
+└── assets/                       静态资源（中文字库、头像素材）
 
-sdkconfig.defaults                 ESP32-C3, USB console, Flash, LVGL defaults
-partitions.csv                     Custom 4 MB app partition
-AGENTS.md                          Coding, validation, and contribution rules
-docs/                              AI hardware development guide
+android_app/                     安卓管理端（240×320 预览 + 头像裁剪上传）
+partitions.csv                    factory(4MB) + storage(SPIFFS 2MB)
+sdkconfig.defaults                ESP32-C3、USB console、Flash、LVGL 默认配置
+docs/                             Passport OS V2 实施计划 / UI 设计规范 / 硬件参考 / 硬件开发指南
+tests/                            主机端纯逻辑自检脚本
 ```
 
-### Architecture & dependency direction
+### 架构与依赖方向
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
-│                     Application Layer                        │
-│  main.c ──► badge/ (facade → data, power, ui, theme)        │
-│              ├─► game/ (pixel game)   └─► settings/          │
-│              transport/ble.c (NimBLE GATT)                   │
+│                       应用层                                 │
+│  main.c ──► app/app_router（全局按键 + 8 页循环导航）        │
+│               ├─► apps/（home/profile/status/cards/dashboard/│
+│               │      tools/games/settings）                  │
+│               ├─► badge/(数据/电源)  transport/ble + avatar  │
 ├──────────────────────────────────────────────────────────────┤
-│                    UI Component Library                      │
-│  components/ui/ (ui_block, ui_label, ui_header_bar,          │
-│                  ui_battery_pct — pure LVGL)                 │
+│                     UI 组件库                                │
+│  components/ui/（ds_tokens/ds_widgets —— V2 设计系统；       │
+│                  ui_pixel —— 旧版像素原语，纯 LVGL）         │
 ├──────────────────────────────────────────────────────────────┤
-│                Hardware Abstraction Layer                    │
-│  components/bsp/ (display, button, audio, battery, i2c)      │
+│                     硬件抽象层                              │
+│  components/bsp/（显示、按键、音频、电池、I2C）            │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Dependency direction: `main → ui → bsp`. The `ui` layer is pure LVGL and knows nothing about hardware. The `badge` submodule is split by responsibility: `data` (NVS storage), `power` (sleep timer), `ui` (LVGL layout), and `theme` (shared constants) — all coordinated by the `badge.c` facade. Dock pages (`game/`, `settings/`) implement the `enter` / `exit` / `key` interface, are launched via `badge_ui_dock_enter()`, and reuse `components/ui` for drawing. New applications can likewise reuse `components/ui` without duplicating pixel primitives.
+依赖方向：`main → ui → bsp`。`ui` 层是纯 LVGL，对硬件一无所知。每个页面（`apps/*`）实现 `enter` / `exit` /（可选）`key` / `action` 接口，统一挂到 Router 的页面表上，页面自身不接管全局按键。
+
+---
+
+## 真机验收清单
+
+- USB Serial/JTAG 有稳定启动日志，无重启循环或 watchdog 复位。
+- 显示方向、颜色、边缘与背光正确，深色极简配色与强调色渲染正常。
+- `UP`/`DOWN` 8 页循环翻页，Page Indicator 跟随；`OK` 进入/操作当前页；长按 `UP`/`OK` 返回 HOME、长按 `DOWN` 快速切换状态。
+- 各页面内容正确：HOME 头像/姓名/职位/状态；PROFILE 完整资料；STATUS 五档切换；CARDS 二维码可扫描；DASHBOARD 诚实数据；TOOLS/GAMES 列表选择与工具/游戏；SETTINGS 开关生效。
+- 个人资料：BLE 写入后 UI 即时更新，重启后仍在。
+- 头像：BLE 上传 → CRC 校验 → Flash 保存 → 重启恢复 → 正常显示。
+- 电量读数合理，CW2017 缺失时降级显示 `--%`。
+- 配置的闲置超时后深睡，任意键唤醒。
+- 反复翻页/BLE 写入不持续泄漏任务、对象或堆。
+
+---
+
+## 文档
+
+| 文档 | 用途 |
+| --- | --- |
+| [`docs/PASSPORT_OS_V2_AI_IMPLEMENTATION_PLAN.md`](docs/PASSPORT_OS_V2_AI_IMPLEMENTATION_PLAN.md) | Passport OS V2 实施计划与任务状态（唯一权威） |
+| [`docs/UI_DESIGN_SPEC.md`](docs/UI_DESIGN_SPEC.md) | 240×320 每页坐标/字体/颜色/Page Indicator 设计规范 |
+| [`docs/HARDWARE_REFERENCE.md`](docs/HARDWARE_REFERENCE.md) | 硬件事实与“绝不能碰”红线 |
+| [`docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md`](docs/AI_HARDWARE_DEVELOPMENT_GUIDE.md) | 完整硬件上下文与排障知识 |
+| [`AGENTS.md`](AGENTS.md) | 编码、验证与贡献规则 |

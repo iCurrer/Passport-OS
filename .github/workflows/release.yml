@@ -84,4 +84,5 @@ jobs:
           cp "$(find artifacts -name 'FoloToy-AI-Passport.bin' | head -n1)" release/
           cp "$(find artifacts -name app-debug.apk | head -n1)" release/
           (cd release && zip -r "../${ZIP}" .)
-          gh release upload "$TAG" "$ZIP" --clobber
+          # 显式指定仓库(避免 gh 依赖 git 上下文失败),并确保在仓库根执行上传
+          gh release upload "$TAG" "$ZIP" -R "$GITHUB_REPOSITORY" --clobber

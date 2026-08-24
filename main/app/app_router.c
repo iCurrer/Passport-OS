@@ -14,6 +14,7 @@
 #include "home.h"             // HOME 页真实渲染
 #include "profile.h"          // PROFILE 页真实渲染
 #include "status.h"           // STATUS 页真实渲染 + status_cycle(快速状态切换)
+#include "cards.h"            // CARDS/QR 页真实渲染
 #include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
 #include "bsp_display.h"      // bsp_lvgl_lock / unlock
@@ -106,7 +107,7 @@ static const app_page_render_t s_pages[APP_PAGE_COUNT] = {
     { home_enter,       home_exit,       NULL },          // HOME
     { profile_enter,    profile_exit,    NULL },          // PROFILE
     { status_enter,     status_exit,     status_cycle },  // STATUS
-    { app_ph_enter,     app_ph_exit,     NULL },          // CARDS
+    { cards_enter,      cards_exit,      NULL },          // CARDS
     { app_ph_enter,     app_ph_exit,     NULL },          // DASHBOARD
     { app_ph_enter,     app_ph_exit,     NULL },          // TOOLS
     { app_ph_enter,     app_ph_exit,     NULL },          // GAMES

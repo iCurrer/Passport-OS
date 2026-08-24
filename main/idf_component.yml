@@ -1,0 +1,5 @@
+# main/idf_component.yml —— Passport OS V2 应用层额外组件依赖。
+# 引入 espressif/qrcode 用于 CARDS/QR 页动态生成二维码(无 PSRAM,轻量)。
+dependencies:
+  idf: ">=5.5.0"
+  espressif/qrcode: "^0.2.0"

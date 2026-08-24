@@ -1548,18 +1548,80 @@ Git Commit：
 
 # TASK-06：CARDS / QR
 
-# TASK-06：CARDS / QR
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-06 验证记录
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（纯逻辑审查 + 编译）
+- [ ] Hardware（已烧录；CARDS 页二维码实机未确认）
+- [x] Commit
+
+修改文件（`main/` 应用层 + 新增组件依赖；未改 BSP、未改 ui 层）：
+
+- 新增 `main/apps/cards/cards.h`、`main/apps/cards/cards.c`（V2 CARDS/QR 页 + 动态二维码渲染）
+- 新增 `main/idf_component.yml`（依赖 `espressif/qrcode: ^0.2.0`）
+- 修改 `main/CMakeLists.txt`（REQUIRES 加 espressif__qrcode；SRCS/INCLUDE_DIRS 加 apps/cards）
+- 修改 `main/app/app_router.c`（CARDS 槽位用 cards_enter/exit）
+- 拉取到 `managed_components/espressif__qrcode`（基于 Nayuki qrcodegen，轻量，无 PSRAM 友好）
+
+明细：
+
+- 二维码内容来自 NVS：BADGE_FIELD_WEBSITE，空则回退 GITHUB，全空则显示 "NO CARD DATA" + "SCAN ME"。
+- 用 `esp_qrcode_generate` 动态编码，`display_func_with_cb` 回调里把模块矩阵画进**单个 RGB565 bitmap**（不是数百个小块,省对象省 RAM）。
+- 位图尺寸自适应：px = size × module_px ≤ 116px,缓冲 ≤ 约27KB;**仅 CARDS 页驻留时占用,退出 cards_exit 即 free**。
+- 副标题显示二维码内容(网站/GitHub)。
+- 内容过长导致 generate 失败时显示 "QR TOO LONG"(Danger)。
+
+UI 验证（静态坐标审查，Content 36–271）：
+
+- [x] 二维码居中 y48,≤116px(48..164)、副标题 y200 —— 均在 Content 内,不触 Footer(272)
+- [ ] 二维码实机可扫描性（未实机确认；需先设置 website 才生成二维码）
+- [ ] 中文/英文/长文本副标题实机渲染（未实机确认；长 URL 会横向溢出,沿用旧行为）
+
+功能验证：
+
+- [x] 编译通过(依赖 espressif__qrcode 正常拉取与链接)
+- [x] 位图缓冲分配/释放路径(cards_exit 释放)
+- [x] 内容选择逻辑:website→github→无(纯逻辑可读)
+- [ ] 实机二维码生成与扫描（未实机确认；当前 website 为空,显示占位）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（cards.c 编译通过;依赖 espressif__qrcode 拉取成功;.bin=0x2de080,App 分区剩 28%）
+```
+
+新增警告：无（以实际构建输出为准）。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 二维码内容当前依赖 website/github NVS 字段;二者默认空 → 实机会显示占位。待 BLE 暴露 website 后可写入真实链接再验证二维码。
+- 位图缓冲 ≤27KB 在无 PSRAM 下可接受,但若与其它大分配叠加需复核 free 堆;page 内无并发大分配。
+- 完整 vCard 名片二维码(含姓名/职位等多字段)为后续增强;当前仅编码单个链接。
 
 ---
+
+# TASK-07：DASHBOARD
 
 # TASK-07：DASHBOARD
 

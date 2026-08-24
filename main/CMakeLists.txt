@@ -4,6 +4,7 @@ idf_component_register(
          "apps/home/home.c"
          "apps/profile/profile.c"
          "apps/status/status.c"
+         "apps/cards/cards.c"
          "badge/badge.c"
          "badge/badge_data.c"
          "badge/badge_power.c"
@@ -19,10 +20,11 @@ idf_component_register(
          "apps/home"
          "apps/profile"
          "apps/status"
+         "apps/cards"
          "badge"
          "game"
          "settings"
          "transport"
          "assets"
-    REQUIRES bsp ui esp_timer nvs_flash bt
+    REQUIRES bsp ui esp_timer nvs_flash bt espressif__qrcode
 )

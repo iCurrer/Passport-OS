@@ -1681,7 +1681,7 @@ idf.py build
 Git Commit：
 
 ```text
-commit（提交后回填）
+242521a
 ```
 
 问题：

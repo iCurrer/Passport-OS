@@ -1473,18 +1473,80 @@ f643b3c
 
 # TASK-05：STATUS
 
-# TASK-05：STATUS
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-05 验证记录
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（主机纯逻辑自检）
+- [ ] Hardware（已烧录；STATUS 页内容与按键未实机确认）
+- [x] Commit
+
+修改文件（仅 `main/` 应用层；未改 BSP、未改 ui 层、未动已验导航/按键逻辑）：
+
+- 新增 `main/apps/status/status.h`、`main/apps/status/status.c`（V2 STATUS 页 + status_cycle）
+- 修改 `main/app/app_router.c`（页面表加 action 回调;STATUS 槽位用 status*;OK_ACTION 转发;DOWN 长按 → status_cycle）
+- 修改 `main/CMakeLists.txt`（加入 apps/status）
+- 新增 `tests/status_cycle_check.py`（主机纯逻辑自检）
+
+明细：
+
+- STATUS 页：ds_header("STATUS"+电量) + 当前状态大字(24px 强调) + 强调分隔线 + 5 档列表(当前档强调/其余灰字) + Footer 指示器。
+- 5 档预设 `AVAILABLE→FOCUS→BUSY→DND→OFFLINE`;`status_cycle()` 切下一档并写 NVS(BADGE_FIELD_STATUS),在场时同步刷新页面。
+- Router：页面表新增 `action`(OK 短按"操作当前页");STATUS 页 action=status_cycle;**DOWN 长按(APP_INTENT_STATUS_TOGGLE)全局调用 status_cycle**——补齐 TASK-02 预留的快速状态切换。
+- 兼容：当前状态不在预设(如旧默认"自由")时 find_index=-1,首次切换跳到 AVAILABLE。
+- 线程：status_cycle 假定调用方已持 LVGL 锁(由 router 持锁调用);页面不在场时仅更新 NVS。
+
+UI 验证（静态坐标审查，Content 36–271）：
+
+- [x] 大字 24px y86..110、分隔线 120、5 行列表 y142..230 步进 22 —— 末尾 244 <271,不触 Footer(272)
+- [x] 列表高亮逻辑(当前档强调/其余灰)
+- [ ] 实机状态大字与列表渲染（未实机确认）
+- [ ] 实机 OK 短按 / DOWN 长按切换效果（未实机确认）
+
+功能验证（纯逻辑自检 `tests/status_cycle_check.py`）：
+
+- [x] find_index：预设 0/4、非预设("自由")/空/None → -1
+- [x] next：AVAILABLE→FOCUS→…→OFFLINE→AVAILABLE(环绕);非预设/空 → AVAILABLE(0)
+- [x] 5 步循环回到起点
+- [ ] 实机按键循环切换（未实机确认）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（status.c 编译无告警；.bin=0x2db140，App 分区剩 29%）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 状态文案改为 5 档英文预设并覆盖旧默认"自由";HOME/PROFILE 也读同一 status 字段,会同步显示新档。
+- 长状态文案无自动换行(预设为短英文,风险低)。
+- action 回调当前仅 STATUS 页使用;其余页为 NULL,后续页 TASK 按需填充。
 
 ---
+
+# TASK-06：CARDS / QR
 
 # TASK-06：CARDS / QR
 

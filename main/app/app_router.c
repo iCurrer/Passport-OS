@@ -13,6 +13,7 @@
 #include "app_router.h"
 #include "home.h"             // HOME 页真实渲染
 #include "profile.h"          // PROFILE 页真实渲染
+#include "status.h"           // STATUS 页真实渲染 + status_cycle(快速状态切换)
 #include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
 #include "bsp_display.h"      // bsp_lvgl_lock / unlock
@@ -98,17 +99,18 @@ static void app_ph_exit(void)
 typedef struct {
     void (*build)(app_page_t page);   // 构建并加载该页屏幕(router 已持锁)
     void (*destroy)(void);            // 销毁该页屏幕
+    void (*action)(void);             // OK 短按"进入/操作当前页"(可 NULL);须持锁
 } app_page_render_t;
 
 static const app_page_render_t s_pages[APP_PAGE_COUNT] = {
-    { home_enter,       home_exit },       // HOME
-    { profile_enter,    profile_exit },    // PROFILE
-    { app_ph_enter,     app_ph_exit },     // STATUS
-    { app_ph_enter,     app_ph_exit },     // CARDS
-    { app_ph_enter,     app_ph_exit },     // DASHBOARD
-    { app_ph_enter,     app_ph_exit },     // TOOLS
-    { app_ph_enter,     app_ph_exit },     // GAMES
-    { app_ph_enter,     app_ph_exit },     // SETTINGS
+    { home_enter,       home_exit,       NULL },          // HOME
+    { profile_enter,    profile_exit,    NULL },          // PROFILE
+    { status_enter,     status_exit,     status_cycle },  // STATUS
+    { app_ph_enter,     app_ph_exit,     NULL },          // CARDS
+    { app_ph_enter,     app_ph_exit,     NULL },          // DASHBOARD
+    { app_ph_enter,     app_ph_exit,     NULL },          // TOOLS
+    { app_ph_enter,     app_ph_exit,     NULL },          // GAMES
+    { app_ph_enter,     app_ph_exit,     NULL },          // SETTINGS
 };
 
 // 切换页:退出旧页 → 记录新页 → 渲染新页。须持 LVGL 锁。
@@ -171,10 +173,12 @@ void app_router_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         if (s_cur != APP_PAGE_HOME) goto_page(APP_PAGE_HOME);
         break;
     case APP_INTENT_OK_ACTION:
-        // 页面局部操作:由各页在对应 TASK 提供(TASK-03..09);占位页无操作。
+        // 进入/操作当前页:转发给该页的 action 回调(STATUS 页=status_cycle;其余页暂无)。
+        if (s_pages[s_cur].action) s_pages[s_cur].action();
         break;
     case APP_INTENT_STATUS_TOGGLE:
-        // 快速状态切换:由 TASK-05(STATUS) 提供语义;占位页无操作。
+        // 快速状态切换(DOWN 长按):全局切下一档状态并写 NVS;STATUS 页在场时同步刷新。
+        status_cycle();
         break;
     default: break;
     }

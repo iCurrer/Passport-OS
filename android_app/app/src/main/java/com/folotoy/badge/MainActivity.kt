@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
     private var gatt: BluetoothGatt? = null
     private var scanCallback: ScanCallback? = null
     private var targetDevice: BluetoothDevice? = null
+    private var sMtu = 23   // 协商后的 ATT MTU(默认最小);决定头像分块大小
 
     // GATT 读写必须串行:一次一个,等回调完成再下一个。值用字节数组(支持原始二进制)。
     private val readQueue = mutableListOf<BluetoothGattCharacteristic>()
@@ -471,7 +472,13 @@ class MainActivity : ComponentActivity() {
                 return
             }
             setConnectionState(ConnectionState.CONNECTED, "已连接")
+            // 请求更大 MTU,使头像 244B 分块能单次写入(否则走长写被固件拒 rc=6)
+            try { g.requestMtu(517) } catch (_: Exception) {}
             readAll()
+        }
+
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, status: Int) {
+            sMtu = if (status == BluetoothGatt.GATT_SUCCESS && mtu >= 23) mtu else 23
         }
 
         override fun onCharacteristicRead(g: BluetoothGatt, chr: BluetoothGattCharacteristic, status: Int) {
@@ -608,10 +615,12 @@ class MainActivity : ComponentActivity() {
         if (bytes.size != AV_SIZE) { setConnectionState(ConnectionState.ERROR, "头像尺寸错误"); return }
 
         val crc = CRC32().also { it.update(bytes) }.value
+        // 分块大小 = min(244, mtu-3),保证单次写入;若 MTU 未协商成,回退到 20 字节(仍可靠)
+        val chunk = minOf(AV_CHUNK, maxOf(20, sMtu - 3))
         writeQueue.clear()
         writeQueue.add(ctrl to "START $AV_SIZE $crc".toByteArray(Charsets.UTF_8))
-        for (i in bytes.indices step AV_CHUNK) {
-            writeQueue.add(data to bytes.copyOfRange(i, minOf(i + AV_CHUNK, bytes.size)))
+        for (i in bytes.indices step chunk) {
+            writeQueue.add(data to bytes.copyOfRange(i, minOf(i + chunk, bytes.size)))
         }
         setConnectionState(ConnectionState.CONNECTED, "上传头像...")
         writeNext()

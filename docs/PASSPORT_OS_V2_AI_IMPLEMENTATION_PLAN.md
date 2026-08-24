@@ -2095,7 +2095,7 @@ Git Commit：
 
 问题：
 
-- 实机上传全链路需手机 App 实现头像裁剪→RGB565→分块上传(Android 端已在 `MainActivity.kt` 实现图库选图/居中裁剪/缩放 80x80/转 RGB565 小端/CRC32/分块上传;待在有 Android SDK 环境编译 APK 实机验证)。
+- 实机上传全链路需手机 App 实现头像裁剪→RGB565→分块上传(Android 端已在 `MainActivity.kt` 实现;**真机发现根因:未协商 ATT MTU 使 244B 分块走长写被 NimBLE 拒(rc=6 Insufficient Resources),数据到不了固件。修复:App 连接后 `requestMtu(517)` + 按协商 MTU 算分块,协商失败回退 20B。**)待编译 APK 实机验证。
 - 上传缓冲 malloc 12,800B(无 PSRAM)在联调时瞬时占用;已限上限并传输结束即 free。
 - 分区表新增 storage 分区,需与固件一起烧录(partition-table.bin 已包含)。
 

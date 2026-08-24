@@ -5,12 +5,14 @@ import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.ComponentActivity
@@ -23,7 +25,8 @@ import com.google.android.material.chip.Chip
 import java.util.UUID
 
 /**
- * FoloToy Badge 安卓端:手动扫描连接名牌,写入/读取 姓名/顶部文字/职位/状态。
+ * FoloToy Badge 安卓端:手动扫描连接名牌,写入/读取 姓名/顶部文字/职位/状态/简介/网站/GitHub。
+ * 提供 240×320 Passport 实时预览,编辑字段即时刷新。
  * App 退出(onDestroy)时停止扫描并关闭 GATT / 释放蓝牙,后台不占用。
  */
 class MainActivity : ComponentActivity() {
@@ -35,6 +38,9 @@ class MainActivity : ComponentActivity() {
         private val CHR_TOP = UUID.fromString("0000FFE2-0000-1000-8000-00805F9B34FB")
         private val CHR_TITLE = UUID.fromString("0000FFE3-0000-1000-8000-00805F9B34FB")
         private val CHR_STATUS = UUID.fromString("0000FFE4-0000-1000-8000-00805F9B34FB")
+        private val CHR_BIO = UUID.fromString("0000FFE5-0000-1000-8000-00805F9B34FB")
+        private val CHR_WEBSITE = UUID.fromString("0000FFE6-0000-1000-8000-00805F9B34FB")
+        private val CHR_GITHUB = UUID.fromString("0000FFE7-0000-1000-8000-00805F9B34FB")
         private const val DEVICE_NAME = "FoloToy-Badge"
     }
 
@@ -58,9 +64,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var topEt: EditText
     private lateinit var titleEt: EditText
     private lateinit var statusEt: EditText
+    private lateinit var bioEt: EditText
+    private lateinit var websiteEt: EditText
+    private lateinit var githubEt: EditText
     private lateinit var scanBtn: MaterialButton
     private lateinit var readBtn: MaterialButton
     private lateinit var writeBtn: MaterialButton
+    private lateinit var passportPreview: PassportPreviewView
 
     // 请求权限结果
     private val permLauncher = registerForActivityResult(
@@ -209,9 +219,51 @@ class MainActivity : ComponentActivity() {
         topEt = field("顶部文字")
         titleEt = field("职位")
         statusEt = field("状态")
+        bioEt = field("简介")
+        websiteEt = field("网站")
+        githubEt = field("GitHub")
 
         formCard.addView(form)
         root.addView(formCard)
+
+        // ---- 240×320 Passport Preview(实时预览) ----
+        val previewCard = MaterialCardView(this).apply {
+            radius = dp(20).toFloat()
+            cardElevation = dp(2).toFloat()
+            strokeWidth = 0
+            setContentPadding(dp(16), dp(16), dp(16), dp(16))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(16) }
+        }
+        val previewColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        previewColumn.addView(TextView(this).apply {
+            text = "Passport 预览"
+            textSize = 15f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurface))
+        })
+        passportPreview = PassportPreviewView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(8) }
+        }
+        previewColumn.addView(passportPreview)
+        previewCard.addView(previewColumn)
+        root.addView(previewCard)
+
+        // 编辑任一字段即实时刷新预览
+        val watcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                passportPreview.invalidate()
+            }
+        }
+        listOf(nameEt, topEt, titleEt, statusEt, bioEt, websiteEt, githubEt)
+            .forEach { it.addTextChangedListener(watcher) }
 
         // ---- 操作按钮卡片 ----
         val actionCard = MaterialCardView(this).apply {
@@ -406,6 +458,9 @@ class MainActivity : ComponentActivity() {
                         CHR_TOP -> topEt.setText(s)
                         CHR_TITLE -> titleEt.setText(s)
                         CHR_STATUS -> statusEt.setText(s)
+                        CHR_BIO -> bioEt.setText(s)
+                        CHR_WEBSITE -> websiteEt.setText(s)
+                        CHR_GITHUB -> githubEt.setText(s)
                     }
                 }
             }
@@ -427,7 +482,8 @@ class MainActivity : ComponentActivity() {
     private fun readAll() {
         val g = gatt ?: return
         val svc = g.getService(SVC) ?: run { setConnectionState(ConnectionState.ERROR, "未找到服务"); return }
-        val wanted = listOf(CHR_NAME, CHR_TOP, CHR_TITLE, CHR_STATUS)
+        val wanted = listOf(CHR_NAME, CHR_TOP, CHR_TITLE, CHR_STATUS,
+            CHR_BIO, CHR_WEBSITE, CHR_GITHUB)
         readQueue.clear()
         readQueue.addAll(svc.characteristics.filter { it.uuid in wanted })
         readNext()
@@ -454,6 +510,9 @@ class MainActivity : ComponentActivity() {
             CHR_TOP to topEt.text.toString(),
             CHR_TITLE to titleEt.text.toString(),
             CHR_STATUS to statusEt.text.toString(),
+            CHR_BIO to bioEt.text.toString(),
+            CHR_WEBSITE to websiteEt.text.toString(),
+            CHR_GITHUB to githubEt.text.toString(),
         )
         for ((uuid, value) in fields) {
             svc.getCharacteristic(uuid)?.let { writeQueue.add(it to value) }
@@ -480,5 +539,77 @@ class MainActivity : ComponentActivity() {
         try { gatt?.close() } catch (_: Exception) {}
         gatt = null
         super.onDestroy()
+    }
+
+    // ---------- 240×320 Passport 预览视图(按 4:3 比例缩放) ----------
+    inner class PassportPreviewView(context: Context) : View(context) {
+        private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        private val cBg = 0xFF000000.toInt()
+        private val cWhite = 0xFFFFFFFF.toInt()
+        private val cGray = 0xFF8A8A8A.toInt()
+        private val cAccent = 0xFF4CD964.toInt()
+        private val cLine = 0xFF1F1F1F.toInt()
+        private val cAvatar = 0xFF2A2A2A.toInt()
+
+        // 保持 240:320(4:3)比例
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val w = MeasureSpec.getSize(widthMeasureSpec)
+            setMeasuredDimension(w, (w * 4f / 3f).toInt())
+        }
+
+        override fun onDraw(canvas: android.graphics.Canvas) {
+            val w = width.toFloat()
+            val s = w / 240f   // 240px 参考宽度缩放
+
+            canvas.drawColor(cBg)
+
+            // 顶部文字(左上)
+            drawText(canvas, 16 * s, 26 * s, topEt.text.toString().ifEmpty { "FoloToy" },
+                cWhite, 14f, false, android.graphics.Paint.Align.LEFT)
+            // 电量(右上,占位静态)
+            drawText(canvas, 224 * s, 26 * s, "86%", cGray, 12f, false,
+                android.graphics.Paint.Align.RIGHT)
+
+            // 分隔线
+            paint.color = cLine
+            canvas.drawRect(0f, 34 * s, w, 34 * s + 2f * s, paint)
+
+            // 头像占位(灰圆角方块,居中上段)
+            val avW = 56f * s
+            val avH = 110f * s
+            val avX = (w - avW) / 2f
+            val avY = 56f * s
+            paint.color = cAvatar
+            canvas.drawRoundRect(avX, avY, avX + avW, avY + avH, 8f * s, 8f * s, paint)
+
+            // 姓名 / 职位 / 状态(居中)
+            drawText(canvas, w / 2f, 208f * s, nameEt.text.toString().ifEmpty { "姓名" },
+                cWhite, 24f, true, android.graphics.Paint.Align.CENTER)
+            drawText(canvas, w / 2f, 232f * s, titleEt.text.toString(), cGray, 14f, false,
+                android.graphics.Paint.Align.CENTER)
+            drawText(canvas, w / 2f, 256f * s, statusEt.text.toString(), cAccent, 14f, false,
+                android.graphics.Paint.Align.CENTER)
+
+            // 底部 8 点 Page Indicator(第 1 点强调实心)
+            val dot = 6f * s
+            val gap = 12f * s
+            val total = 7 * gap + dot
+            val x0 = (w - total) / 2f
+            for (i in 0 until 8) {
+                val x = x0 + i * gap
+                paint.color = if (i == 0) cAccent else cGray
+                canvas.drawCircle(x + dot / 2f, 300f * s, dot / 2f, paint)
+            }
+        }
+
+        private fun drawText(canvas: android.graphics.Canvas, x: Float, y: Float, text: String,
+                             color: Int, px: Float, bold: Boolean, align: android.graphics.Paint.Align) {
+            paint.color = color
+            paint.textSize = px * (width.toFloat() / 240f)
+            paint.typeface = if (bold) android.graphics.Typeface.DEFAULT_BOLD
+                             else android.graphics.Typeface.DEFAULT
+            paint.textAlign = align
+            canvas.drawText(text, x, y, paint)
+        }
     }
 }

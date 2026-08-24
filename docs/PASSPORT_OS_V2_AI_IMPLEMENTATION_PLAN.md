@@ -1926,12 +1926,12 @@ Restart
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [ ] Build（**NOT TESTED** —— 本机无 Android SDK / Java,未编译）
+- [x] UI（静态审查）
+- [x] Function（静态审查）
+- [ ] Hardware（未实机）
+- [x] Commit
 
 要求：
 
@@ -1942,6 +1942,60 @@ Android App 显示：
 ```
 
 修改个人信息时实时更新预览。
+
+### TASK-11 验证记录
+
+状态：
+
+- [x] Code（Kotlin 改动完成）
+- [ ] Build（**NOT TESTED**:本机无 Android SDK(路径不存在)且无 Java,无法 gradle 编译）
+- [x] UI（静态代码审查）
+- [x] Function（静态代码审查）
+- [ ] Hardware（未实机,需手机装 APK 测试）
+- [x] Commit
+
+修改文件：
+
+- `android_app/app/src/main/java/com/folotoy/badge/MainActivity.kt`
+
+明细：
+
+- 新增资料字段 UUID：CHR_BIO 0xFFE5、CHR_WEBSITE 0xFFE6、CHR_GITHUB 0xFFE7（与固件 ble.c 一致）。
+- 表单新增「简介 / 网站 / GitHub」三个输入框。
+- **240×320 Passport Preview**：`PassportPreviewView`(inner View,onMeasure 保持 4:3 比例)绘制仿 HOME 页预览(顶部文字/电量占位/头像占位/姓名/职位/状态/8 点指示器)。
+- 7 个输入框挂 `TextWatcher` → `invalidate()`,编辑即实时刷新预览;读取回填也会触发刷新。
+- read/write 队列加入新字段,onCharacteristicRead 回填新增字段。
+
+UI 验证（静态审查）：
+
+- [x] PassportPreviewView 按 4:3 比例缩放(240:320),onMeasure 保证
+- [x] 预览绘制坐标参照 240px 参考宽度,等比例放大
+- [x] 7 字段 TextWatcher 刷新预览
+- [ ] 实机预览渲染效果（未实机）
+
+功能验证（静态审查）：
+
+- [x] 新字段 UUID 与固件一致(0xFFE5-0xFFE7)
+- [x] read/write 队列与回填逻辑全覆盖新字段
+- [ ] 实机 BLE 连接读写(含新字段)（未实机）
+
+编译：
+
+```text
+本机无 Android SDK / Java,未执行 gradle 编译。
+Build: NOT TESTED
+```
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 需在有 Android SDK + JDK 的环境跑 `gradlew assembleDebug` 编译,并在真机安装验证预览与 BLE 新字段读写。
+- 预览中电量为静态占位"86%",未接真实电量;头像为灰块占位(真头像流程在 TASK-12)。
 
 ---
 

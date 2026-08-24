@@ -1218,7 +1218,7 @@ idf.py build
 Git Commit：
 
 ```text
-commit（提交后回填）
+9ea4a28
 ```
 
 问题：

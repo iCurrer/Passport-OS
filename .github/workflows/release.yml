@@ -59,6 +59,8 @@ jobs:
     name: Attach binaries to Release
     needs: [firmware, android]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write        # 上传 Release assets 需要写权限
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4

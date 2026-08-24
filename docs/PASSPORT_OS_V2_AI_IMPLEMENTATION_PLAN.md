@@ -2011,12 +2011,12 @@ Git Commit：
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
 
 必须验证：
 
@@ -2037,6 +2037,71 @@ Flash
  ↓
 显示
 ```
+
+### TASK-12 验证记录
+
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（主机纯逻辑自检）
+- [ ] Hardware（已烧录；头像上传/显示实机未确认）
+- [x] Commit
+
+修改文件：
+
+- `partitions.csv`：新增 `storage`(spiffs,0x410000,2MB) 分区
+- 新增 `main/avatar/avatar_storage.h/.c`（SPIFFS 挂载 + `/avatar.bin` save/load/has）
+- `main/transport/ble.c`：新增头像上传 GATT（AV_CTRL 0xFFE8 / AV_DATA 0xFFE9，分块 + CRC32 校验）
+- `main/apps/home/home.c`：优先渲染 `/avatar.bin`(80x80 RGB565)，无则回退内置素材
+- `main/app/app_router.c`：init 调 avatar_storage_init
+- `main/CMakeLists.txt`：加入 avatar_storage.c + `spiffs` REQUIRES
+- 新增 `tests/avatar_transfer_check.py`
+
+明细：
+
+- **存储**：SPIFFS 挂到 `/spiffs`，头像文件 `/avatar.bin`(80x80 RGB565=12,800B)；首次/损坏自动格式化。
+- **BLE 上传协议**：写 `AV_CTRL "START <size> <crc32>"` 开始分配缓冲；`AV_DATA` 分块写入；收满后 `esp_crc32_le` 校验，匹配则 `avatar_storage_save`；`CANCEL` 中止。缓冲上限 64KB 防滥用。
+- **显示**：HOME 页有 `/avatar.bin` 则渲染 80x80 用户头像，否则回退内置 80x157 素材缩放。
+- 头像的裁剪/缩放/RGB565 全部在 Android 端完成（TASK-11 预览侧），ESP32 只接收-校验-保存-刷新。
+
+UI 验证（静态坐标审查）：
+
+- [x] 用户头像 80x80 置于 HOME_AVATAR_Y=56(56..136)，不触姓名(178)
+- [x] 无头像时回退内置素材
+- [ ] 实机头像显示效果（未实机确认）
+
+功能验证（主机自检 `tests/avatar_transfer_check.py`）：
+
+- [x] 12,800B 分块装配完整一致
+- [x] CRC 匹配(esp_crc32_le==zlib.crc32)、损坏字节不匹配
+- [x] 超长块 clamp、空块忽略、@244B 需 53 块
+- [ ] 实机 BLE 上传→CRC→Flash→显示 全链路（未实机确认,需手机 App 实现头像裁剪/上传）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（avatar_storage.c/ble.c/home.c 编译通过;分区表含 spiffs;.bin=0x2f17f0,App 分区剩 26%）
+```
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 实机上传全链路需手机 App 实现头像裁剪→RGB565→分块上传(Android 端尚未实现,需后续/在有 SDK 环境补)。
+- 上传缓冲 malloc 12,800B(无 PSRAM)在联调时瞬时占用;已限上限并传输结束即 free。
+- 分区表新增 storage 分区,需与固件一起烧录(partition-table.bin 已包含)。
+
+---
+
+# TASK-13：SETTINGS
 
 ---
 

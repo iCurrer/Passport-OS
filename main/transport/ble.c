@@ -14,8 +14,11 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 #include "badge.h"
+#include "avatar_storage.h"
+#include "esp_crc.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static const char *TAG = "ble";
 
@@ -28,6 +31,11 @@ static const char *TAG = "ble";
 #define UUID_BIO     0xFFE5
 #define UUID_WEBSITE 0xFFE6
 #define UUID_GITHUB  0xFFE7
+#define UUID_AV_CTRL 0xFFE8   // 头像控制(命令:START size crc / CANCEL)
+#define UUID_AV_DATA 0xFFE9   // 头像数据(分块写入)
+
+// 头像单次写入接收缓冲上限(防止滥用内存)
+#define AV_MAX_SIZE   (64 * 1024)
 
 #define DEVICE_NAME "FoloToy-Badge"
 
@@ -67,6 +75,88 @@ static int on_char_access(uint16_t conn_handle, uint16_t attr_handle,
     return 0;
 }
 
+// ============================================================================
+// 头像上传(分块 + CRC32 校验)
+// ============================================================================
+static uint8_t  *s_av_buf;
+static uint32_t  s_av_size;
+static uint32_t  s_av_off;
+static uint32_t  s_av_crc;
+static bool      s_av_active;
+
+static void avatar_abort(void)
+{
+    if (s_av_buf) { free(s_av_buf); s_av_buf = NULL; }
+    s_av_active = false;
+    s_av_size = s_av_off = s_av_crc = 0;
+}
+
+// 头像控制特性:写 "START <size> <crc32>" 开始;写 "CANCEL" 中止。
+static int on_av_ctrl(uint16_t conn_handle, uint16_t attr_handle,
+                      struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)conn_handle; (void)attr_handle; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return 0;
+
+    char cmd[32];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, cmd, sizeof(cmd) - 1, &len) != 0) return 0;
+    cmd[len] = 0;
+
+    if (strncmp(cmd, "CANCEL", 6) == 0) {
+        avatar_abort();
+        ESP_LOGI(TAG, "头像传输已中止");
+        return 0;
+    }
+    if (strncmp(cmd, "START", 5) == 0) {
+        uint32_t size = 0, crc = 0;
+        if (sscanf(cmd, "START %lu %lu", &size, &crc) != 2) return 0;
+        if (size == 0 || size > AV_MAX_SIZE) { ESP_LOGE(TAG, "头像尺寸非法 %lu", (unsigned long)size); return 0; }
+        avatar_abort();
+        s_av_buf = malloc(size);
+        if (!s_av_buf) { ESP_LOGE(TAG, "头像缓冲分配失败 %lu B", (unsigned long)size); return 0; }
+        s_av_size = size;
+        s_av_crc = crc;
+        s_av_off = 0;
+        s_av_active = true;
+        ESP_LOGI(TAG, "头像传输开始 size=%lu crc=%lu", (unsigned long)size, (unsigned long)crc);
+        return 0;
+    }
+    return 0;
+}
+
+// 头像数据特性:分块写入,收满后校验 CRC 并存盘。
+static int on_av_data(uint16_t conn_handle, uint16_t attr_handle,
+                      struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)conn_handle; (void)attr_handle; (void)arg;
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return 0;
+    if (!s_av_active) return 0;
+
+    uint8_t buf[244];
+    uint16_t len = 0;
+    if (ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf), &len) != 0) return 0;
+    if (len == 0) return 0;
+
+    uint32_t n = (uint32_t)len;
+    if (s_av_off + n > s_av_size) n = s_av_size - s_av_off;
+    memcpy(s_av_buf + s_av_off, buf, n);
+    s_av_off += n;
+
+    if (s_av_off >= s_av_size) {
+        uint32_t calc = esp_crc32_le(0, s_av_buf, s_av_size);
+        if (calc == s_av_crc) {
+            avatar_storage_save(s_av_buf, s_av_size);
+            ESP_LOGI(TAG, "头像校验通过并保存");
+        } else {
+            ESP_LOGE(TAG, "头像 CRC 校验失败: 收到 %08lx 期望 %08lx",
+                     (unsigned long)calc, (unsigned long)s_av_crc);
+        }
+        avatar_abort();
+    }
+    return 0;
+}
+
 static const struct ble_gatt_svc_def gatt_svcs[] = {
     {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
@@ -93,6 +183,10 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
             { .uuid = BLE_UUID16_DECLARE(UUID_GITHUB),
               .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
               .arg = (void *)(intptr_t)BADGE_FIELD_GITHUB },
+            { .uuid = BLE_UUID16_DECLARE(UUID_AV_CTRL),
+              .access_cb = on_av_ctrl, .flags = BLE_GATT_CHR_F_WRITE, .arg = NULL },
+            { .uuid = BLE_UUID16_DECLARE(UUID_AV_DATA),
+              .access_cb = on_av_data, .flags = BLE_GATT_CHR_F_WRITE, .arg = NULL },
             { 0 },
         },
     },

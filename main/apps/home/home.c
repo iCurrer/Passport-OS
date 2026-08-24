@@ -7,20 +7,25 @@
 //   Footer(272-319)   :Page Indicator(HOME=第 0 点实心)
 //
 // 数据显示动态字段(绝不写死进固件):top/name/title/status 来自 badge_data(NVS)。
-// 头像当前为现有 80x157 全身素材的等比缩放;真正的 80x80 自定义头像文件在 TASK-12。
+// 头像:优先显示用户经 BLE 上传的 80x80 RGB565(/avatar.bin,TASK-12),否则回退到内置 80x157 素材缩放。
 #include "home.h"
 #include "badge_data.h"
 #include "badge_avatar.h"
 #include "badge_fonts.h"
 #include "bsp_battery.h"
+#include "avatar_storage.h"
 #include "ds_tokens.h"
 #include "ds_widgets.h"
 #include "ui_pixel.h"
 #include "lvgl.h"
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 
-static lv_obj_t *s_scr;
-static ds_dots_t s_dots;
+static lv_obj_t        *s_scr;
+static ds_dots_t        s_dots;
+static uint8_t         *s_avatar_buf;   // 用户头像 RGB565 缓冲
+static lv_image_dsc_t   s_avatar_dsc;   // 头像 image 描述符(静态,需驻留)
 
 // 头像缩放因子:现有素材 80x157 → 等比缩到 约56x110(256=100%)。
 #define HOME_AVATAR_SCALE  180
@@ -31,6 +36,41 @@ static ds_dots_t s_dots;
 #define HOME_TITLE_Y     212
 #define HOME_STATUS_Y    244
 #define HOME_STATUS_GAP  12     // 状态色点到文字的水平间距
+
+// 放置用户头像(80x80 RGB565,从 /avatar.bin 读入)。成功返回 true。
+static bool place_user_avatar(lv_obj_t *scr)
+{
+    if (!avatar_storage_has()) return false;
+    s_avatar_buf = malloc(AVATAR_SIZE);
+    if (!s_avatar_buf) return false;
+    if (avatar_storage_load(s_avatar_buf, AVATAR_SIZE) != AVATAR_SIZE) {
+        free(s_avatar_buf); s_avatar_buf = NULL;
+        return false;
+    }
+    memset(&s_avatar_dsc, 0, sizeof(s_avatar_dsc));
+    s_avatar_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    s_avatar_dsc.header.cf    = LV_COLOR_FORMAT_RGB565;
+    s_avatar_dsc.header.w     = AVATAR_W;
+    s_avatar_dsc.header.h     = AVATAR_H;
+    s_avatar_dsc.data_size    = AVATAR_SIZE;
+    s_avatar_dsc.data         = s_avatar_buf;
+    lv_obj_t *img = lv_image_create(scr);
+    lv_image_set_src(img, &s_avatar_dsc);
+    lv_obj_align(img, LV_ALIGN_TOP_MID, 0, HOME_AVATAR_Y);
+    return true;
+}
+
+// 回退:内置全身素材等比缩小居中。
+static void place_sprite_avatar(lv_obj_t *scr)
+{
+    lv_obj_t *avatar = lv_image_create(scr);
+    lv_image_set_src(avatar, &badge_avatar);
+    lv_image_set_scale(avatar, HOME_AVATAR_SCALE);
+    uint32_t av_w = badge_avatar.header.w * HOME_AVATAR_SCALE / 256;
+    uint32_t av_h = badge_avatar.header.h * HOME_AVATAR_SCALE / 256;
+    lv_obj_set_size(avatar, av_w, av_h);
+    lv_obj_align(avatar, LV_ALIGN_TOP_MID, 0, HOME_AVATAR_Y);
+}
 
 void home_enter(app_page_t page)
 {
@@ -46,14 +86,9 @@ void home_enter(app_page_t page)
     ds_header(s_scr, badge_data_get(BADGE_FIELD_TOP), bsp_battery_soc(),
               &badge_font_gb2312_small, &lv_font_montserrat_14);
 
-    // 头像:等比缩小后水平居中。显式设置缩放后尺寸,确保后续布局按实际渲染区域计算(解决与姓名重叠)。
-    lv_obj_t *avatar = lv_image_create(s_scr);
-    lv_image_set_src(avatar, &badge_avatar);
-    lv_image_set_scale(avatar, HOME_AVATAR_SCALE);
-    uint32_t av_w = badge_avatar.header.w * HOME_AVATAR_SCALE / 256;
-    uint32_t av_h = badge_avatar.header.h * HOME_AVATAR_SCALE / 256;
-    lv_obj_set_size(avatar, av_w, av_h);
-    lv_obj_align(avatar, LV_ALIGN_TOP_MID, 0, HOME_AVATAR_Y);
+    // 头像:优先用户上传 80x80,否则回退内置素材。
+    s_avatar_buf = NULL;
+    if (!place_user_avatar(s_scr)) place_sprite_avatar(s_scr);
 
     // 姓名(主字号)
     lv_obj_t *name = ui_label(s_scr, badge_data_get(BADGE_FIELD_NAME),
@@ -83,5 +118,6 @@ void home_enter(app_page_t page)
 void home_exit(void)
 {
     if (s_scr) { lv_obj_delete(s_scr); s_scr = NULL; }
+    if (s_avatar_buf) { free(s_avatar_buf); s_avatar_buf = NULL; }
     // s_dots 引用的圆点对象随 screen 一并删除,不再使用
 }

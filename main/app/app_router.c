@@ -19,6 +19,7 @@
 #include "tools.h"            // TOOLS 页真实渲染 + 页内按键(tools_key)
 #include "games.h"            // GAMES 页真实渲染 + 页内按键(games_key)
 #include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
+#include "avatar_storage.h"   // avatar_storage_init(SPIFFS 挂载 + 头像文件)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
 #include "bsp_display.h"      // bsp_lvgl_lock / unlock
 #include "bsp_battery.h"      // bsp_battery_soc(Header 电量)
@@ -210,6 +211,7 @@ void app_router_goto(app_page_t page)
 void app_router_init(void)
 {
     badge_data_init();           // 载入动态字段(NVS):名称/职位/状态/顶部文字(原由 badge_enter 负责)
+    avatar_storage_init();       // 挂载 SPIFFS,头像文件 /avatar.bin
     badge_power_init();          // 启动自动休眠计时 + 复位诊断(原由 badge_enter 负责)
     s_cur = APP_PAGE_HOME;
     s_ph_scr = NULL;

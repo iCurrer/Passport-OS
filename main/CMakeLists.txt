@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS "main.c"
          "app/app_router.c"
+         "avatar/avatar_storage.c"
          "apps/home/home.c"
          "apps/profile/profile.c"
          "apps/status/status.c"
@@ -20,6 +21,7 @@ idf_component_register(
          "assets/badge_avatar.c"
     INCLUDE_DIRS "."
          "app"
+         "avatar"
          "apps/home"
          "apps/profile"
          "apps/status"
@@ -32,5 +34,5 @@ idf_component_register(
          "settings"
          "transport"
          "assets"
-    REQUIRES bsp ui esp_timer nvs_flash bt espressif__qrcode
+    REQUIRES bsp ui esp_timer nvs_flash bt espressif__qrcode spiffs
 )

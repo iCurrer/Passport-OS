@@ -46,10 +46,13 @@ void home_enter(app_page_t page)
     ds_header(s_scr, badge_data_get(BADGE_FIELD_TOP), bsp_battery_soc(),
               &badge_font_gb2312_small, &lv_font_montserrat_14);
 
-    // 头像:等比缩小后水平居中
+    // 头像:等比缩小后水平居中。显式设置缩放后尺寸,确保后续布局按实际渲染区域计算(解决与姓名重叠)。
     lv_obj_t *avatar = lv_image_create(s_scr);
     lv_image_set_src(avatar, &badge_avatar);
     lv_image_set_scale(avatar, HOME_AVATAR_SCALE);
+    uint32_t av_w = badge_avatar.header.w * HOME_AVATAR_SCALE / 256;
+    uint32_t av_h = badge_avatar.header.h * HOME_AVATAR_SCALE / 256;
+    lv_obj_set_size(avatar, av_w, av_h);
     lv_obj_align(avatar, LV_ALIGN_TOP_MID, 0, HOME_AVATAR_Y);
 
     // 姓名(主字号)

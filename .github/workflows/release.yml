@@ -64,6 +64,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Inspect downloaded artifacts (diagnostic)
+        run: |
+          echo "--- artifacts tree ---"
+          find artifacts -type f 2>/dev/null || echo "(no files found under artifacts/)"
       - name: Upload binaries to Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,9 +78,10 @@ jobs:
           VER="${TAG#v}"
           ZIP="Passport-OS-V2-${VER}.zip"
           mkdir -p release
-          cp artifacts/firmware/bootloader.bin release/
-          cp artifacts/firmware/partition-table.bin release/
-          cp artifacts/firmware/FoloToy-AI-Passport.bin release/
-          cp artifacts/android-apk/app-debug.apk release/
+          # 用 find 定位文件（兼容 download-artifact@v4 的目录结构），找不到则报错并列出已下载内容
+          cp "$(find artifacts -name bootloader.bin | head -n1)" release/
+          cp "$(find artifacts -name partition-table.bin | head -n1)" release/
+          cp "$(find artifacts -name 'FoloToy-AI-Passport.bin' | head -n1)" release/
+          cp "$(find artifacts -name app-debug.apk | head -n1)" release/
           (cd release && zip -r "../${ZIP}" .)
           gh release upload "$TAG" "$ZIP" --clobber

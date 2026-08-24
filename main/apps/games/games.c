@@ -38,6 +38,10 @@ static games_mode_t s_mode = GAMES_LIST;
 static int          s_sel = 0;
 static lv_obj_t    *s_scr;              // 列表/占位屏
 static ds_dots_t    s_dots;
+static lv_obj_t    *s_row_bg[GAMES_COUNT];    // 列表行背景
+static lv_obj_t    *s_row_name[GAMES_COUNT];  // 列表行名称
+
+static void refresh_sel(void);   // 前置声明
 
 static void build_list_screen(void)
 {
@@ -50,17 +54,29 @@ static void build_list_screen(void)
     ds_header(s_scr, "GAMES", bsp_battery_soc(),
               &badge_font_gb2312_small, &lv_font_montserrat_14);
 
+    // 行对象只建一次;选择刷新仅改样式
     for (int i = 0; i < GAMES_COUNT; i++) {
         int y = ROW_Y0 + i * ROW_GAP;
-        bool sel = (i == s_sel);
-        ui_block(s_scr, LIST_X, y, LIST_W, ROW_H, sel ? DS_CARD : DS_BG);
-        lv_obj_t *lbl = ui_label(s_scr, s_game_names[i], &badge_font_gb2312_small,
-                                 sel ? DS_ACCENT : DS_TEXT_SECONDARY);
-        lv_obj_set_pos(lbl, LABEL_X, y + LABEL_Y_OFS);
+        s_row_bg[i] = ui_block(s_scr, LIST_X, y, LIST_W, ROW_H, DS_BG);
+        s_row_name[i] = ui_label(s_scr, s_game_names[i], &badge_font_gb2312_small,
+                                 DS_TEXT_SECONDARY);
+        lv_obj_set_pos(s_row_name[i], LABEL_X, y + LABEL_Y_OFS);
     }
+    refresh_sel();
 
     ds_footer(s_scr, &s_dots, APP_PAGE_COUNT, APP_PAGE_GAMES);
     lv_screen_load(s_scr);
+}
+
+// 原地刷新选中高亮(不重建对象)
+static void refresh_sel(void)
+{
+    for (int i = 0; i < GAMES_COUNT; i++) {
+        bool sel = (i == s_sel);
+        lv_obj_set_style_bg_color(s_row_bg[i], lv_color_hex(sel ? DS_CARD : DS_BG), 0);
+        lv_obj_set_style_text_color(s_row_name[i],
+                                    lv_color_hex(sel ? DS_ACCENT : DS_TEXT_SECONDARY), 0);
+    }
 }
 
 static void enter_game(int idx)
@@ -125,7 +141,7 @@ bool games_key(bsp_btn_t btn, bsp_btn_ev_t ev)
         case BSP_BTN_OK:   enter_game(s_sel); return true;
         default: return false;
         }
-        build_list_screen();   // 重绘高亮
+        refresh_sel();   // 原地刷新高亮
         return true;
     }
 

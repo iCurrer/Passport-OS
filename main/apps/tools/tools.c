@@ -45,6 +45,8 @@ static tools_mode_t s_mode = TOOLS_LIST;
 static int          s_sel = 0;          // 当前选中工具
 static lv_obj_t    *s_scr;              // 当前屏幕(列表或工具)
 static ds_dots_t    s_dots;
+static lv_obj_t    *s_row_bg[TOOLS_COUNT];    // 列表行背景
+static lv_obj_t    *s_row_name[TOOLS_COUNT];  // 列表行名称
 static lv_obj_t    *s_sw_lbl;           // 秒表时间
 static lv_timer_t  *s_sw_timer;
 static bool         s_sw_running;
@@ -56,14 +58,12 @@ static int64_t      s_sw_start_us;      // 当前运行段起点
 // ---------------------------------------------------------------------------
 static void list_refresh_sel(void)
 {
-    // 每行:背景块(选中=卡片色)+ 标签(选中=强调)
+    // 原地刷新高亮,不重建对象(避免文字被盖/内存泄漏)
     for (int i = 0; i < TOOLS_COUNT; i++) {
-        int y = ROW_Y0 + i * ROW_GAP;
         bool sel = (i == s_sel);
-        ui_block(s_scr, LIST_X, y, LIST_W, ROW_H, sel ? DS_CARD : DS_BG);
-        lv_obj_t *lbl = ui_label(s_scr, s_tool_names[i], &badge_font_gb2312_small,
-                                 sel ? DS_ACCENT : DS_TEXT_SECONDARY);
-        lv_obj_set_pos(lbl, LABEL_X, y + LABEL_Y_OFS);
+        lv_obj_set_style_bg_color(s_row_bg[i], lv_color_hex(sel ? DS_CARD : DS_BG), 0);
+        lv_obj_set_style_text_color(s_row_name[i],
+                                    lv_color_hex(sel ? DS_ACCENT : DS_TEXT_SECONDARY), 0);
     }
 }
 
@@ -77,6 +77,15 @@ static void build_list_screen(void)
 
     ds_header(s_scr, "TOOLS", bsp_battery_soc(),
               &badge_font_gb2312_small, &lv_font_montserrat_14);
+
+    // 行对象只建一次
+    for (int i = 0; i < TOOLS_COUNT; i++) {
+        int y = ROW_Y0 + i * ROW_GAP;
+        s_row_bg[i] = ui_block(s_scr, LIST_X, y, LIST_W, ROW_H, DS_BG);
+        s_row_name[i] = ui_label(s_scr, s_tool_names[i], &badge_font_gb2312_small,
+                                 DS_TEXT_SECONDARY);
+        lv_obj_set_pos(s_row_name[i], LABEL_X, y + LABEL_Y_OFS);
+    }
     list_refresh_sel();
     ds_footer(s_scr, &s_dots, APP_PAGE_COUNT, APP_PAGE_TOOLS);
     lv_screen_load(s_scr);

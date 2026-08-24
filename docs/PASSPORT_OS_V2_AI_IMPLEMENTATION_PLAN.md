@@ -2213,36 +2213,85 @@ UI Restore   ← 唤醒重建当前页
 
 ## 屏幕
 
-* [ ] 240×320
-* [ ] 所有元素不越界
-* [ ] 无裁切
-* [ ] 无重叠
+* [x] 240×320（画布与骨架坐标复核，见下表）
+* [x] 所有元素不越界（全部页面静态坐标复核）
+* [ ] 无裁切（需真机渲染复核；静态坐标均 <271 不触 Footer）
+* [ ] 无重叠（静态坐标无重叠；长文本极端值需真机复核）
 
 ## 字体
 
-* [ ] 中文
-* [ ] 英文
-* [ ] 数字
-* [ ] 长文本
-* [ ] 特殊字符
+* [ ] 中文（字库需真机渲染验证）
+* [x] 英文（各页标题/标签均为 ASCII，静态复核字体引用一致）
+* [x] 数字（Montserrat_14/20 引用一致）
+* [ ] 长文本（NVS 长 bio/website/name 无换行会横向溢出——已列入 remarks）
+* [ ] 特殊字符（未实机验证）
 
 ## 导航
 
-* [ ] UP
-* [ ] DOWN
-* [ ] OK
-* [ ] Long Press
+* [x] UP（Router:CLICK→PREV，局部列表页消费选择，主机自检 PASS）
+* [x] DOWN（Router:CLICK→NEXT，局部列表页消费，主机自检 PASS）
+* [x] OK（Router:CLICK→OK_ACTION，STATUS→status_cycle，主机自检 PASS）
+* [x] Long Press（UP/OK→HOME，DOWN→STATUS_TOGGLE；自检 PASS）
+* [ ] 实机按键物理触发（NO_BOARD，未实测）
 
-## 页面
+## 页面（静态坐标审查，Content 36–271，均不触 Footer 272）
 
-* [ ] HOME
-* [ ] PROFILE
-* [ ] STATUS
-* [ ] CARDS
-* [ ] DASHBOARD
-* [ ] TOOLS
-* [ ] GAMES
-* [ ] SETTINGS
+* [x] HOME（头像56..166 / 姓名178 / 职位212 / 状态244..258）
+* [x] PROFILE（全字段满时末行 GitHub 230..244；空字段自动收起）
+* [x] STATUS（大字86..110 / 分隔线120 / 5 行列表142..244）
+* [x] CARDS（QR ≤116px 于48..164 / 副标题200 / 缓冲退出 free）
+* [x] DASHBOARD（UPTIME56 / 分隔线112 / 状态行132..212）
+* [x] TOOLS（4 行列表56..244，选中高亮）
+* [x] GAMES（4 行列表56..244，选中高亮）
+* [x] SETTINGS（3 行列表56..196，右值 BLE/SLEEP/VERSION）
+* [ ] 真实设备渲染全部页面（NO_BOARD，未实测）
+
+### §31 最终 UI Audit 验证记录（本记录由第 31 章节末执行）
+
+状态：
+
+- [x] Code（仅文档记录，未改动任何固件代码——审计只读）
+- [x] Build（idf.py build 通过，见下）
+- [x] UI（**STATIC REVIEW PASS**：8 页全部静态坐标/引用复核，无越界、无重叠、骨架一致）
+- [ ] Function（静态逻辑复核——主机自检脚本已 PASS 6/6，但实机按键未验证）
+- [ ] Hardware（**NO_BOARD：NOT TESTED** —— 屏幕渲染、中文字库、二维码可扫描性、BLE、深睡均为实机项，未连板）
+- [x] Commit
+
+审查范围（逐一读取了实现源码，未改动）：
+
+- `components/ui/src/ds_widgets.c` + `ds_tokens.h`（Header/Footer/Page Indicator 坐标与配色）
+- `main/app/app_router.c`（全局按键映射与循环导航）
+- `main/apps/{home,profile,status,cards,dashboard,tools,games,settings}` 全部 8 页 `.c`
+- `main/badge/badge_data.c`（动态字段默认值/NVS）
+
+静态结论：
+
+- **骨架统一**：8 页全部复用 `ds_header`（标题+电量+分隔线 y=34）+ `ds_footer`（分隔线 y=271 + 8 点 Page Indicator y=293），坐标与 spec §1/§4 一致；各页传入正确 `app_page_*` 槽位，指示器当前点正确。
+- **无越界/无重叠**：每页 Content 元素底缘（见上表）均 <271，不触 Footer(272)；Header 元素固定 0–35 内，不侵入 Content。状态行右值 x=150 与最长标签（如 "DASHBOARD"/"SETTINGS"）不重叠电量块(158)。
+- **Page Indicator 8 点**总宽 90、x0=75、点 75..159 <240；y=293（Footer 272–319 内）。
+- **按键契约**：Router 在 CLICK 时先交页面局部 `key`（TOOLS/GAMES/SETTINGS 列表选择、GAMES 内 game_key）消费，消费不了才走全局翻页；LONG 一律全局（UP/OK→HOME、DOWN→快速状态）；符合 spec §3 与 plan §25。
+- **主机逻辑自检**：`tests/` 下 6 个纯逻辑脚本本次全部重新运行 PASS（ds_geometry / app_router / status_cycle / tools_list / avatar_transfer / settings_logic）。
+
+编译：
+
+```text
+idf.py build
+结果：PASS（exit 0，无编译告警）
+FoloToy-AI-Passport.bin = 0x2f1f90 bytes；App 分区剩 26% free
+```
+
+Git Commit：
+
+```text
+614812e
+```
+
+Remarks —— 仍需真机复验项（未连板，按纪律不计 PASS）：
+
+- **长文本无自动换行**：name/title/bio/website/github 均为单行居中，NVS 字段上限（name/title 32B、bio/website/github 48B）下若用户写入超宽文本会横向溢出屏幕左右边距。当前默认值均短，静态布局在默认与常见取值下无越界；已列为唯一待真机/联调关注的已知 UI 风险。
+- **HOME Header 品牌**显示 `BADGE_FIELD_TOP`（默认 "FoloToy"），如用户写入长 top 文字，可能贴近电量块(158)；spec §6 同此设计，暂无裁切。
+- CARDS 页二维码内容为空时显示 "NO CARD DATA"；真实可扫描性需写入 website 后真机扫码。
+- DASHBOARD 诚实用 UPTIME 代替墙钟（无 RTC），无假时间。
 
 ---
 

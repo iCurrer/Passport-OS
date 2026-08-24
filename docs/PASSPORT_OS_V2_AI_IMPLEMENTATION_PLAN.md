@@ -2339,7 +2339,7 @@ Hardware: NOT TESTED（未连板，翻页恢复与长按返回需真机确认）
 Git Commit：
 
 ```text
-9faec8b
+3a79116
 ```
 
 ---

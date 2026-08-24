@@ -35,9 +35,53 @@ jobs:
       - name: 构建 Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: 准备发布产物
+        run: |
+          set -euo pipefail
+          # 检查默认输出路径下的 APK
+          BUILD_DIR=app/build/outputs/apk/debug
+          echo "=== APK 输出目录内容 ==="
+          ls -la "$BUILD_DIR"
+          if [ ! -f "$BUILD_DIR/app-debug.apk" ]; then
+            echo "ERROR: 没找到 $BUILD_DIR/app-debug.apk, 构建可能失败了"
+            exit 1
+          fi
+
+          # 重命名为品牌名,用户一眼就认得出
+          OUT_DIR=artifact
+          mkdir -p "$OUT_DIR"
+          cp "$BUILD_DIR/app-debug.apk" "$OUT_DIR/FoloToy-Badge.apk"
+
+          # APK 构建信息
+          APK_SIZE=$(stat -c%s "$OUT_DIR/FoloToy-Badge.apk")
+          APK_SHA256=$(sha256sum "$OUT_DIR/FoloToy-Badge.apk" | awk '{print $1}')
+          # 从 build.gradle 读取 versionCode/versionName
+          VERSION_NAME=$(grep -oP "versionName\s+'\K[^']+" app/build.gradle)
+          VERSION_CODE=$(grep -oP "versionCode\s+\K\d+" app/build.gradle)
+          {
+            echo "App: FoloToy Badge (Android)"
+            echo "Build date:  $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "Version:     ${VERSION_NAME} (code ${VERSION_CODE})"
+            echo "Package:     com.folotoy.badge"
+            echo "Min SDK:     26 (Android 8.0 Oreo)"
+            echo "Target SDK:  35"
+            echo "Git commit:  ${GITHUB_SHA::8}"
+            echo "Git ref:     ${GITHUB_REF_NAME}"
+            echo "CI run ID:   ${GITHUB_RUN_ID}"
+            echo ""
+            echo "APK file:    FoloToy-Badge.apk"
+            echo "Size:        ${APK_SIZE} bytes"
+            echo "SHA256:      ${APK_SHA256}"
+          } > "$OUT_DIR/apk_info.txt"
+
+          echo "=== artifact 目录内容 ==="
+          ls -la "$OUT_DIR"
+          echo "=== apk_info.txt ==="
+          cat "$OUT_DIR/apk_info.txt"
+
       - name: 上传 APK 产物
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: android_app/app/build/outputs/apk/debug/*.apk
+          path: android_app/artifact/
           retention-days: 30

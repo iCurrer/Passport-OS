@@ -1146,21 +1146,86 @@ bd91091
 
 状态：
 
-- [ ] Code
-- [ ] Build
-- [ ] UI
-- [ ] Function
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
 - [ ] Hardware
-- [ ] Commit
+- [x] Commit
 
 完成：
 
-- [ ] Header
-- [ ] Footer
-- [ ] Page Indicator
-- [ ] Typography
-- [ ] Colors
-- [ ] Spacing
+- [x] Header
+- [x] Footer
+- [x] Page Indicator
+- [x] Typography
+- [x] Colors
+- [x] Spacing
+
+### TASK-01 验证记录
+
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（纯逻辑审查）
+- [ ] Hardware（NO_BOARD → 未实测）
+- [x] Commit
+
+修改文件（仅 `components/ui` design-system 层；未改 BSP、未改任何页面接线、未删旧 `ui_pixel`）：
+
+- 新增 `components/ui/include/ds_tokens.h`（V2 配色/骨架间距/排版尺寸 token）
+- 新增 `components/ui/include/ds_widgets.h`、`components/ui/src/ds_widgets.c`（ds_header / ds_footer / ds_page_dots / ds_page_dots_set）
+- 修改 `components/ui/CMakeLists.txt`（加入 ds_widgets.c）
+
+明细：
+
+- Header：标题 x=16,y=13 + 电量条(外框 20x10 @158,14 / 内芯 16x6 @160,16 / 填充随 SOC) + 百分比 @186,12 + 底部分隔线 y=34（x=16 宽 208）。
+- Footer：顶部 1px 分隔线 y=271 + Page Indicator。
+- Page Indicator：8 点，直径 6、间距 12，水平居中(x0=75)、垂直居中 y=293(中心 296)；当前页实心(强调)/其余空心(次要描边)；`ds_page_dots_set` 复用对象刷新高亮。
+- Typography：排版分层（TITLE 24px / BODY 14px / NUM 14px）以 token 记录尺寸，具体 lv_font 由页面层传入（components/ui 不依赖 main/assets 中文字库）。
+- Colors：V2 深色极简 #000000 背景等 8 色 token。
+- Spacing：骨架(Header 0–35 / Content 36–271 / Footer 272–319)与边距 16 归档为 token。
+
+UI 验证（静态坐标复查）：
+
+- [x] 240×320 无越界（Header/Footer/指示器坐标均落在骨架内）
+- [x] Page Indicator 8 点总宽 90、x0=75、点 75..159，均 <240
+- [ ] 中文正常（字库在页面 TASK 接线时验证——本 TASK 未接线页面，字体不进 components/ui）
+- [ ] 英文/数字正常（同上，接入页面时验证）
+- [ ] 长文本正常（同上）
+- [ ] KEY 导航正常（N/A，本 TASK 无页面按键）
+
+功能验证（纯逻辑审查）：
+
+- [x] ds_page_dots 的 count/current 越界防护与 8 点上限
+- [x] ds_page_dots_set 高亮切换不重建对象（复用 apply_dot）
+- [x] ds_header 电量 fill 宽度 clamp、<20%/<10% 变色、SOC=-1 显示 "--"
+- [x] 返回 ref 的 brand/fill/pct 可被调用方持有并刷新
+- [ ] 实机渲染（NO_BOARD，未验证）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（ds_widgets.c 编译无告警；libui.a 构建通过；App 分区仍剩 28%）
+```
+
+新增警告：无（唯一预先存在警告 `badge_data.c TAG unused` 与本次无关）。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 本 TASK 只交付 design-system 原语，尚未被任何页面调用，故最终镜像体积未变化；待 TASK-02/03 起接入页面后编译体积与 malloc 会上升，届时复查内部 RAM。
+- `components/ui` 不引入主工程 GB2312 中文字库，字体（中文/数字）须由页面层在各自 TASK 接入时传入并做真机验证。
+- ds_dots_t 圆点数组按 plan「页面最多 8 个」设为 8 上限；若后续页面调整需同步。
 
 ---
 

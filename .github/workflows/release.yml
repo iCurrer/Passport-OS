@@ -81,12 +81,10 @@ jobs:
           set -e
           # 版本名取自 Release tag（去首字母 v 便于做文件名）
           TAG="$GITHUB_REF_NAME"
-          VER="${TAG#v}"
-          ZIP="Passport-OS-V2-${VER}.zip"
           mkdir -p release
           # 收集合并固件(单个完整 8M bin) + 安卓 APK;用 find 定位,兼容 download-artifact@v4 目录结构
           cp "$(find artifacts -name 'FoloToy-AI-Passport-8M.bin' | head -n1)" release/
           cp "$(find artifacts -name app-debug.apk | head -n1)" release/
-          (cd release && zip -r "../${ZIP}" .)
-          # 显式指定仓库(避免 gh 依赖 git 上下文失败),并确保在仓库根执行上传
-          gh release upload "$TAG" "$ZIP" -R "$GITHUB_REPOSITORY" --clobber
+          # 直接上传两个文件到 Release assets(不打包 zip),用户可直接下载
+          gh release upload "$TAG" release/FoloToy-AI-Passport-8M.bin \
+            release/app-debug.apk -R "$GITHUB_REPOSITORY" --clobber

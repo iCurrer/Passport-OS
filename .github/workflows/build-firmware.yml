@@ -1,0 +1,47 @@
+name: Build Firmware
+
+# 触发条件:推送到 main/master、PR、以及在 Actions 页面手动点按钮
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 编译 ESP-IDF 固件
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.2   # 对齐 AGENTS.md 要求的 ESP-IDF 5.5.x
+          target: esp32c3
+          path: .
+          command: |
+            idf.py set-target esp32c3
+            idf.py build
+
+      - name: 收集烧录所需的 bin
+        run: |
+          mkdir -p artifact
+          # 主应用固件(项目名 FoloToy-AI-Passport -> FoloToy-AI-Passport.bin)
+          cp build/FoloToy-AI-Passport.bin artifact/firmware.bin
+          # bootloader / 分区表 / 初始 ota_data
+          cp build/bootloader/bootloader.bin artifact/ 2>/dev/null || true
+          cp build/partition_table/partition-table.bin artifact/ 2>/dev/null || true
+          cp build/ota_data_initial.bin artifact/ 2>/dev/null || true
+          # 一键烧录脚本(里面写了每个 bin 的烧录地址)
+          cp build/flash_args artifact/ 2>/dev/null || true
+          echo "=== artifact 目录内容 ==="
+          ls -la artifact/
+
+      - name: 上传固件产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-bin
+          path: artifact/
+          retention-days: 30  # 30 天后自动清理,避免占用配额

@@ -1428,17 +1428,17 @@ a508738
 
 明细：
 
-- PROFILE 用 ds_header/ds_footer 渲染：Header("PROFILE"+电量) + 头像(现有素材缩至 64 宽) + 姓名(24px) + 职位/简介/网站(14px)。
-- 数据全部来自 badge_data(NVS)：name/title/bio/website；**空字段自动跳过**（add_centered_line）。
+- PROFILE 用 ds_header/ds_footer 渲染：Header("PROFILE"+电量) + **纯文字档案**(无头像)：姓名(24px)→职位(14px)→强调分隔线→状态(色点+文字)→简介/网站/GitHub(14px)。
+- 采用垂直累计 y 游标,字段空时自动收起不留空行;状态/分隔线保持视觉节奏。
+- 数据全部来自 badge_data(NVS)：name/title/status/bio/website/github；**空字段自动跳过**。
 - 数据模型扩展：badge_field_t 新增 bio/website/github 三字段并持久化 NVS；nvs_load_str 空默认值不再每次开机回写 NVS。
-- 头像仍为现有全身素材等比缩放；真 80×80 头像在 TASK-12。
+- 按用户反馈去掉 PROFILE 头像,仅文字展示(原版用全身素材缩略,已移除)。
 
 UI 验证（静态坐标审查，Content 36–271）：
 
-- [x] 头像 y48..约173(64 宽)、姓名 24px y184..208、职位 216、简介 236、网站 256 —— 均在 Content 内,不触 Footer(272)
-- [x] 空字段跳过,避免空行/重叠
+- [x] 纯文字布局：姓名 24px y56..80、职位 98、分隔线 122、状态 148、简介 178、网站 204、GitHub 230..244 —— 全部在场时末尾仍 <271,不触 Footer(272)
+- [x] 空字段自动收起,不留空行/重叠
 - [ ] 中文/英文/长文本实机渲染（未实机确认；长 bio/website 无换行会横向溢出,沿用旧行为）
-- [ ] 头像实机显示效果（未实机确认）
 
 功能验证（纯逻辑审查）：
 

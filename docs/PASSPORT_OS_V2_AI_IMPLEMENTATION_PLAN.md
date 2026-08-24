@@ -1755,7 +1755,7 @@ idf.py build
 Git Commit：
 
 ```text
-commit（提交后回填）
+722b9f2
 ```
 
 问题：

@@ -38,4 +38,6 @@ jobs:
       - name: Set up Android SDK (accept licenses)
         uses: android-actions/setup-android@v3
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug

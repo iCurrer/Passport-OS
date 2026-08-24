@@ -2288,10 +2288,52 @@ cb914ea
 
 Remarks —— 仍需真机复验项（未连板，按纪律不计 PASS）：
 
-- **长文本无自动换行**：name/title/bio/website/github 均为单行居中，NVS 字段上限（name/title 32B、bio/website/github 48B）下若用户写入超宽文本会横向溢出屏幕左右边距。当前默认值均短，静态布局在默认与常见取值下无越界；已列为唯一待真机/联调关注的已知 UI 风险。
+- **长文本无自动换行**：name/title/bio 均为单行居中，NVS 字段上限（name/title 32B、bio 48B）下若用户写入超宽文本会横向溢出屏幕左右边距。当前默认值均短，静态布局在默认与常见取值下无越界；已列为唯一待真机/联调关注的已知 UI 风险。
 - **HOME Header 品牌**显示 `BADGE_FIELD_TOP`（默认 "FoloToy"），如用户写入长 top 文字，可能贴近电量块(158)；spec §6 同此设计，暂无裁切。
-- CARDS 页二维码内容为空时显示 "NO CARD DATA"；真实可扫描性需写入 website 后真机扫码。
+- CARDS 页二维码内容为空时显示 "NO CARD DATA"；真实可扫描性需写入「二维码内容」字段后真机扫码。
 - DASHBOARD 诚实用 UPTIME 代替墙钟（无 RTC），无假时间。
+
+### 后续 UX 修复：移除 website/github 链接字段，新增独立「二维码内容」字段（§31 之后实施）
+
+背景与目标：让用户更聚焦「自定义二维码」，而不用假装有网站/GitHub。许多用户没有网站或 GitHub，只想提供一个二维码（如微信，其二维码内容本质上是一个链接）。因此：
+
+- **删除 `website`、`github` 两个链接字段**（固件 NVS/BLE/GATT + 安卓表单全端移除）。
+- **新增独立 `qr` 字段**（NVS key `qr`，256 字符），作为「二维码内容」——用户自定义的微信/网址等链接，**只用于生成二维码，不展示为文本**。
+- **PROFILE 页不再显示任何链接文本**（只保留 姓名/职位/状态/简介 bio）。
+- **CARDS 页二维码内容 = `qr` 字段**；副标题改为固定 "SCAN ME"，不再显示链接原文。
+- **安卓端**：把「网站 / GitHub」两个输入框改为单一「二维码内容」输入框（写固件 `qr` 特性）。
+
+BLE 特性调整：
+
+- 删除 `0xFFE6`(website)、`0xFFE7`(github)；新增 `0xFFE7` = 二维码内容 `qr`。
+- 写缓冲 `buf[64] → buf[256]`，容纳最长字段（qr=256）。
+
+改动文件：
+
+- `main/badge/badge.h`：删 website/github，新增 BADGE_FIELD_QR
+- `main/badge/badge_data.c`：NVS `web`/`git` → `qr`(256)；init/get/set 三处同步
+- `main/transport/ble.c`：GATT 特性 website/github → qr(0xFFE7)；写缓冲 256
+- `main/apps/profile/profile.c`：删除网站/GitHub 两行展示
+- `main/apps/cards/cards.c`：二维码内容只取 `qr`；副标题固定 "SCAN ME"
+- `android_app/.../MainActivity.kt`：常量/表单/读写队列改为「二维码内容」qr
+
+验证：
+
+```text
+idf.py build
+结果：PASS（exit 0，无代码告警；.bin = 0x2f1d70，App 分区剩 26% free）
+UI: STATIC REVIEW PASS —— PROFILE 移除链接行，末行 bio <271；CARDS 副标题固定 SCAN ME
+Function: 固件字段枚举/BLE/页面引用静态审查干净(无 WEBSITE/GITHUB 残留)
+Hardware: 待真机验证(BLE 写 qr → CARDS 二维码变化；PROFILE 无链接文本)
+```
+
+Git Commit：
+
+```text
+xxx；（提交后回填）
+```
+
+---
 
 ### 后续 UX 修复：列表页「入口态→菜单态→子屏」三态导航（§31 之后实施）
 
@@ -2364,9 +2406,7 @@ Git Commit：
 * [ ] 修改职位
 * [ ] 修改状态
 * [ ] 修改简介
-* [ ] 修改 QR
-* [ ] 修改网站
-* [ ] 修改 GitHub
+* [ ] 修改二维码内容（QR）
 
 ### BLE
 

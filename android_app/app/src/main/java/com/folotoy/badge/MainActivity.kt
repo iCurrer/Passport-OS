@@ -28,7 +28,7 @@ import java.util.UUID
 import java.util.zip.CRC32
 
 /**
- * FoloToy Badge 安卓端:手动扫描连接名牌,写入/读取 姓名/顶部文字/职位/状态/简介/网站/GitHub。
+ * FoloToy Badge 安卓端:手动扫描连接名牌,写入/读取 姓名/顶部文字/职位/状态/简介/二维码内容。
  * 提供 240×320 Passport 实时预览,编辑字段即时刷新。
  * App 退出(onDestroy)时停止扫描并关闭 GATT / 释放蓝牙,后台不占用。
  */
@@ -42,8 +42,7 @@ class MainActivity : ComponentActivity() {
         private val CHR_TITLE = UUID.fromString("0000FFE3-0000-1000-8000-00805F9B34FB")
         private val CHR_STATUS = UUID.fromString("0000FFE4-0000-1000-8000-00805F9B34FB")
         private val CHR_BIO = UUID.fromString("0000FFE5-0000-1000-8000-00805F9B34FB")
-        private val CHR_WEBSITE = UUID.fromString("0000FFE6-0000-1000-8000-00805F9B34FB")
-        private val CHR_GITHUB = UUID.fromString("0000FFE7-0000-1000-8000-00805F9B34FB")
+        private val CHR_QR = UUID.fromString("0000FFE7-0000-1000-8000-00805F9B34FB")
         private val CHR_AV_CTRL = UUID.fromString("0000FFE8-0000-1000-8000-00805F9B34FB")
         private val CHR_AV_DATA = UUID.fromString("0000FFE9-0000-1000-8000-00805F9B34FB")
         private const val DEVICE_NAME = "FoloToy-Badge"
@@ -75,8 +74,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var titleEt: EditText
     private lateinit var statusEt: EditText
     private lateinit var bioEt: EditText
-    private lateinit var websiteEt: EditText
-    private lateinit var githubEt: EditText
+    private lateinit var qrEt: EditText
     private lateinit var scanBtn: MaterialButton
     private lateinit var readBtn: MaterialButton
     private lateinit var writeBtn: MaterialButton
@@ -217,7 +215,7 @@ class MainActivity : ComponentActivity() {
             til.addView(et); form.addView(til); return et
         }
         nameEt = field("姓名"); topEt = field("顶部文字"); titleEt = field("职位")
-        statusEt = field("状态"); bioEt = field("简介"); websiteEt = field("网站"); githubEt = field("GitHub")
+        statusEt = field("状态"); bioEt = field("简介"); qrEt = field("二维码内容")
         formCard.addView(form); editContainer.addView(formCard)
 
         // 操作按钮
@@ -317,7 +315,7 @@ class MainActivity : ComponentActivity() {
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) { passportPreview.invalidate() }
         }
-        listOf(nameEt, topEt, titleEt, statusEt, bioEt, websiteEt, githubEt)
+        listOf(nameEt, topEt, titleEt, statusEt, bioEt, qrEt)
             .forEach { it.addTextChangedListener(watcher) }
 
         scrollView.addView(root)
@@ -462,8 +460,7 @@ class MainActivity : ComponentActivity() {
                         CHR_TITLE -> titleEt.setText(s)
                         CHR_STATUS -> statusEt.setText(s)
                         CHR_BIO -> bioEt.setText(s)
-                        CHR_WEBSITE -> websiteEt.setText(s)
-                        CHR_GITHUB -> githubEt.setText(s)
+                        CHR_QR -> qrEt.setText(s)
                     }
                 }
             }
@@ -486,7 +483,7 @@ class MainActivity : ComponentActivity() {
         val g = gatt ?: return
         val svc = g.getService(SVC) ?: run { setConnectionState(ConnectionState.ERROR, "未找到服务"); return }
         val wanted = listOf(CHR_NAME, CHR_TOP, CHR_TITLE, CHR_STATUS,
-            CHR_BIO, CHR_WEBSITE, CHR_GITHUB)
+            CHR_BIO, CHR_QR)
         readQueue.clear()
         readQueue.addAll(svc.characteristics.filter { it.uuid in wanted })
         readNext()
@@ -514,8 +511,7 @@ class MainActivity : ComponentActivity() {
             CHR_TITLE to titleEt.text.toString(),
             CHR_STATUS to statusEt.text.toString(),
             CHR_BIO to bioEt.text.toString(),
-            CHR_WEBSITE to websiteEt.text.toString(),
-            CHR_GITHUB to githubEt.text.toString(),
+            CHR_QR to qrEt.text.toString(),
         )
         for ((uuid, value) in fields) {
             svc.getCharacteristic(uuid)?.let { writeQueue.add(it to value.toByteArray(Charsets.UTF_8)) }

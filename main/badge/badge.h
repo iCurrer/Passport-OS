@@ -17,8 +17,7 @@ typedef enum {
     BADGE_FIELD_TITLE,      // 职位
     BADGE_FIELD_STATUS,     // 状态
     BADGE_FIELD_BIO,        // 简介(brief intro)
-    BADGE_FIELD_WEBSITE,    // 网站
-    BADGE_FIELD_GITHUB,     // GitHub
+    BADGE_FIELD_QR,         // 二维码内容(微信/网址等;只用于画二维码,不展示文本)
     BADGE_FIELD_MAX,
 } badge_field_t;
 

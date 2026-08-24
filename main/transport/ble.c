@@ -1,6 +1,6 @@
 // main/ble.c —— 名牌 BLE 服务(ESP-IDF NimBLE)。
-// 广播名:FoloToy-Badge。GATT 服务含 7 个可写/可读特性:
-//   name / top / title / status / bio / website / github
+// 广播名:FoloToy-Badge。GATT 服务含 6 个可写/可读特性:
+//   name / top / title / status / bio / qr(二维码内容)
 // 写入时更新 NVS 并刷新 LVGL 界面(见 badge_update_text)。
 // 安卓端使用对应 128 位 UUID: 0000FFEx-0000-1000-8000-00805F9B34FB。
 #include "esp_log.h"
@@ -29,8 +29,7 @@ static const char *TAG = "ble";
 #define UUID_TITLE   0xFFE3
 #define UUID_STAT    0xFFE4
 #define UUID_BIO     0xFFE5
-#define UUID_WEBSITE 0xFFE6
-#define UUID_GITHUB  0xFFE7
+#define UUID_QR      0xFFE7   // 二维码内容(微信/网址等;只用于生成二维码,不展示文本)
 #define UUID_AV_CTRL 0xFFE8   // 头像控制(命令:START size crc / CANCEL)
 #define UUID_AV_DATA 0xFFE9   // 头像数据(分块写入)
 
@@ -54,8 +53,8 @@ static int on_char_access(uint16_t conn_handle, uint16_t attr_handle,
     badge_field_t field = (badge_field_t)(intptr_t)arg;
 
     if (ctxt->op == BLE_GATT_ACCESS_OP_WRITE_CHR) {
-        // 提取写入的字符串(可能跨 mbuf)。64 容纳最长字段缓冲(bio/website/github=48)
-        char buf[64];
+        // 提取写入的字符串(可能跨 mbuf)。256 容纳最长字段缓冲(qr=256)。
+        char buf[256];
         uint16_t len = 0;
         int r = ble_hs_mbuf_to_flat(ctxt->om, buf, sizeof(buf) - 1, &len);
         if (r == 0) {
@@ -177,12 +176,9 @@ static const struct ble_gatt_svc_def gatt_svcs[] = {
             { .uuid = BLE_UUID16_DECLARE(UUID_BIO),
               .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
               .arg = (void *)(intptr_t)BADGE_FIELD_BIO },
-            { .uuid = BLE_UUID16_DECLARE(UUID_WEBSITE),
+            { .uuid = BLE_UUID16_DECLARE(UUID_QR),
               .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
-              .arg = (void *)(intptr_t)BADGE_FIELD_WEBSITE },
-            { .uuid = BLE_UUID16_DECLARE(UUID_GITHUB),
-              .access_cb = on_char_access, .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
-              .arg = (void *)(intptr_t)BADGE_FIELD_GITHUB },
+              .arg = (void *)(intptr_t)BADGE_FIELD_QR },
             { .uuid = BLE_UUID16_DECLARE(UUID_AV_CTRL),
               .access_cb = on_av_ctrl, .flags = BLE_GATT_CHR_F_WRITE, .arg = NULL },
             { .uuid = BLE_UUID16_DECLARE(UUID_AV_DATA),

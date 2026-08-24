@@ -2,10 +2,11 @@
 //
 // 布局(参考 docs/UI_DESIGN_SPEC.md §9):
 //   Header(0-35)      :ds_header("CARDS" + 电量)
-//   Content(36-271)   :二维码(约 ≤116px,居中) → 副标题(网站/SCAN ME)
+//   Content(36-271)   :二维码(约 ≤116px,居中) → 副标题("SCAN ME")
 //   Footer(272-319)   :Page Indicator(CARDS=第 3 点实心)
 //
-// 二维码内容来自 NVS(BADGE_FIELD_WEBSITE,空则回退 GITHUB;全空则显示占位文本)。
+// 二维码内容来自 NVS 的 QR 字段(用户自定义,微信/网址等),仅用于生成二维码,
+// 页面不展示二维码内容/任何链接文本。
 // 用 espressif/qrcode 动态生成;无 PSRAM:渲染成单个 RGB565 bitmap(≤约27KB),
 // 仅在 CARDS 页驻留时占用,退出即释放(见 cards_exit)。
 #include "cards.h"
@@ -82,13 +83,11 @@ static void qr_display_cb(esp_qrcode_handle_t qrcode, void *user_data)
     ESP_LOGI(TAG, "QR %d x %d (module_px=%d, buf=%u B)", size, size, module_px, (unsigned)n);
 }
 
-// 选二维码内容:网站优先,GitHub 回退。
+// 二维码内容:来自用户自定义的 QR 字段(微信/网址等)。只用于生成二维码,不展示文本。
 static const char *qr_content(void)
 {
-    const char *web = badge_data_get(BADGE_FIELD_WEBSITE);
-    if (web && web[0]) return web;
-    const char *git = badge_data_get(BADGE_FIELD_GITHUB);
-    if (git && git[0]) return git;
+    const char *qr = badge_data_get(BADGE_FIELD_QR);
+    if (qr && qr[0]) return qr;
     return NULL;
 }
 
@@ -123,9 +122,8 @@ void cards_enter(app_page_t page)
         lv_obj_align(no, LV_ALIGN_TOP_MID, 0, QR_Y + 60);
     }
 
-    // 副标题:显示二维码内容(网站/GitHub)或提示
-    const char *cap = content ? content : "SCAN ME";
-    lv_obj_t *cap_lbl = ui_label(s_scr, cap, &badge_font_gb2312_small,
+    // 副标题:固定提示,不展示二维码内容/链接原文
+    lv_obj_t *cap_lbl = ui_label(s_scr, "SCAN ME", &badge_font_gb2312_small,
                                  DS_TEXT_SECONDARY);
     lv_obj_align(cap_lbl, LV_ALIGN_TOP_MID, 0, QR_CAPTION_Y);
 

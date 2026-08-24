@@ -162,8 +162,6 @@ V2 TASK-01 将新增/改造 design-system 原语；本文件只定义**页面级
 │          ──────────────── (强调分隔线)  │
 │          ● AVAILABLE      (14px 强调)   │
 │          Vibe coding…     (14px 次)     │
-│          example.com      (14px 次)     │
-│          github.com/…     (14px 次)     │
 │                                        │
 │          ○ ● ○ ○ ○ ○ ○ ○             │
 └────────────────────────────────────────┘
@@ -176,12 +174,10 @@ V2 TASK-01 将新增/改造 design-system 原语；本文件只定义**页面级
 | 强调分隔线 | 居中(宽 72, x 84..156) y≈122，`#4CD964` |
 | 状态 status | 色点+文字成组居中 y≈148，强调色 |
 | 简介 bio | 居中 y≈178，14px 次要 |
-| 网站 website | 居中 y≈204，14px 次要 |
-| GitHub github | 居中 y≈230，14px 次要 |
 
-展示完整 profile：name / title / status / bio / website / github。
+展示 profile：name / title / status / bio。**不展示任何链接文本**（网站/GitHub 已移除；二维码内容字段仅用于 CARDS 页生成二维码）。
 
-> 布局要点：垂直累计 y 游标，字段为空时**自动收起不留空行**；在场字段全满时末行 y≈230..244，仍 <271（Content 底部），不触 Footer(272)。无头像、无复杂卡片，极简高对比。
+> 布局要点：垂直累计 y 游标，字段为空时**自动收起不留空行**；在场字段全满时末行(简介) y≈178..192，仍 <271（Content 底部），不触 Footer(272)。无头像、无复杂卡片，极简高对比。
 
 ---
 
@@ -230,10 +226,10 @@ V2 TASK-01 将新增/改造 design-system 原语；本文件只定义**页面级
 | 元素 | 坐标 |
 | --- | --- |
 | 二维码 | 160×160，水平居中，Content 上段 y≈48 |
-| 副标题 `SCAN ME`/网址 | 二维码下方 y≈230 |
+| 副标题 `SCAN ME` | 二维码下方 y≈230（固定提示，不展示内容） |
 | 页脚指示器 | y≈296 |
 
-二维码内容来自 NVS `card.qr`/`card.website`（动态生成，不编译进固件，TASK-06）。渲染本文档不限定具体编码库，实现时评估无 PSRAM 的 RAM 占用。
+二维码内容来自 NVS `qr` 字段（用户自定义的微信/网址等，动态生成，不编译进固件）。**页面不展示二维码内容/任何链接文本**；副标题固定 `SCAN ME`。渲染本文档不限定具体编码库，实现时评估无 PSRAM 的 RAM 占用。
 
 ---
 
@@ -342,5 +338,5 @@ V2 TASK-01 将新增/改造 design-system 原语；本文件只定义**页面级
 | 左头像右信息列 | 垂直居中布局（头像在上、信息在下） |
 | 浅色像素风 ui_pixel | 深色极简 #000000 design-system |
 | 每页自行处理按键 | App Router 统一全局按键 |
-| name/top/title/status 四字段 | 扩展 name/title/top/bio/status/website/github/qr + 头像文件 |
+| name/top/title/status 四字段 | name/title/top/bio/status/qr + 头像文件（website/github 已移除） |
 | BLE 默认开 | BLE 默认 OFF，同步时短暂开启，同步完即关并深睡 |

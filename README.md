@@ -53,9 +53,9 @@
 
 ```text
 PAGE 0  HOME        身份名片：头像 + 姓名 + 职位 + 状态
-PAGE 1  PROFILE     完整个人资料：姓名 / 职位 / 状态 / 简介 / 网站 / GitHub
+PAGE 1  PROFILE     完整个人资料：姓名 / 职位 / 状态 / 简介（不含链接文本）
 PAGE 2  STATUS      快速状态：AVAILABLE / FOCUS / BUSY / DND / OFFLINE
-PAGE 3  CARDS/QR    个人二维码（动态生成，内容取网站/GitHub）
+PAGE 3  CARDS/QR    个人二维码（动态生成，内容取「二维码内容」字段，不展示链接）
 PAGE 4  DASHBOARD   仪表盘：运行时长(UPTIME) / FOCUS 会话计时 / BLE / WIFI（诚实数据，不造假时钟）
 PAGE 5  TOOLS       工具：TIMER / STOPWATCH / CALCULATOR / MORSE
 PAGE 6  GAMES       游戏：REACTION / MEMORY / MORSE / CATCH
@@ -70,8 +70,8 @@ PAGE 7  SETTINGS    设置：BLE 开关 / 休眠超时 / 固件版本
 
 - **深色极简 UI**（V2 design-system）：黑底 `#000000`、主文字 `#FFFFFF`、强调色 `#4CD964`，低信息密度、高对比。
 - **上下翻页个人身份**：一键就能翻看自己的名片、状态、二维码与个人信息，无需进入复杂菜单。
-- **可自定义个人资料**：姓名、顶部文字、职位、状态、简介、网站、GitHub 全部存 **NVS**，经 BLE 修改后**掉电不丢**，**不编译进固件**。
-- **个人二维码**：CARDS 页动态生成 QR（依赖 `espressif/qrcode`），内容取自网站/ GitHub 字段。
+- **可自定义个人资料**：姓名、顶部文字、职位、状态、简介全部存 **NVS**，经 BLE 修改后**掉电不丢**，**不编译进固件**。
+- **个人二维码**：CARDS 页动态生成 QR（依赖 `espressif/qrcode`），内容取自用户自定义的「二维码内容」字段（如微信/网址链接），页面不展示链接文本。
 - **头像上传（BLE）**：手机端裁剪/缩放/转 RGB565 后经 BLE 分块上传，ESP32 接收 → CRC32 校验 → 保存到 SPIFFS（`/avatar.bin`，80×80 RGB565）→ 立即刷新显示。
 - **3 键导航**：全部按键逻辑由 **App Router** 统一分发，符合三键语义表。
 - **低功耗**：可配置闲置超时（30s/1m/2m/5m/never）自动 **Deep Sleep**，任意键唤醒；BLE 与 Wi-Fi 默认关，仅在需要同步时打开。
@@ -91,8 +91,7 @@ PAGE 7  SETTINGS    设置：BLE 开关 / 休眠超时 / 固件版本
 | `0xFFE3` | 职位 | `title` |
 | `0xFFE4` | 状态 | `status` |
 | `0xFFE5` | 简介 | `bio` |
-| `0xFFE6` | 网站 | `web` |
-| `0xFFE7` | GitHub | `git` |
+| `0xFFE7` | 二维码内容 | `qr` |
 
 - **头像特性**（只写）：
 

@@ -52,9 +52,9 @@ Inside list pages (TOOLS / GAMES / SETTINGS), short **UP/DOWN** select and **OK*
 
 ```text
 PAGE 0  HOME        Identity: avatar + name + title + status
-PAGE 1  PROFILE     Full profile: name / title / status / bio / website / GitHub
+PAGE 1  PROFILE     Full profile: name / title / status / bio (no link text)
 PAGE 2  STATUS      Quick status: AVAILABLE / FOCUS / BUSY / DND / OFFLINE
-PAGE 3  CARDS/QR    Personal QR (dynamic; content from website/GitHub)
+PAGE 3  CARDS/QR    Personal QR (dynamic; content from the QR field, no link text shown)
 PAGE 4  DASHBOARD   Uptime / FOCUS session / BLE / WIFI (honest data, no fake clock)
 PAGE 5  TOOLS       TIMER / STOPWATCH / CALCULATOR / MORSE
 PAGE 6  GAMES       REACTION / MEMORY / MORSE / CATCH
@@ -68,8 +68,8 @@ Each page shows a bottom **Page Indicator** (`● ○ ○ ○ ○ ○ ○ ○`) 
 ## Features
 
 - **Dark minimalist UI** (V2 design system): black `#000000` background, white `#FFFFFF` primary text, `#4CD964` accent, low information density.
-- **Custom profile** stored in **NVS** (not compiled into firmware): name, top bar, title, status, bio, website, GitHub — editable over BLE, survives power loss.
-- **Personal QR**: CARDS page renders a QR dynamically (via `espressif/qrcode`) from the website/GitHub field.
+- **Custom profile** stored in **NVS** (not compiled into firmware): name, top bar, title, status, bio — editable over BLE, survives power loss.
+- **Personal QR**: CARDS page renders a QR dynamically (via `espressif/qrcode`) from the user's custom QR field (e.g. a WeChat/URL link); the page shows no link text.
 - **BLE avatar upload**: the phone crops/scales/converts to RGB565, uploads in chunks over BLE; the ESP32 receives → CRC32-checks → saves to SPIFFS (`/avatar.bin`, 80×80 RGB565) → refreshes immediately.
 - **3-key navigation**: every key event is dispatched by the App Router.
 - **Low power**: configurable idle timeout (30s/1m/2m/5m/never) then **Deep Sleep**, wake on any button; BLE and Wi-Fi default off, turned on only when syncing.
@@ -89,8 +89,7 @@ Each page shows a bottom **Page Indicator** (`● ○ ○ ○ ○ ○ ○ ○`) 
 | `0xFFE3` | title | `title` |
 | `0xFFE4` | status | `status` |
 | `0xFFE5` | bio | `bio` |
-| `0xFFE6` | website | `web` |
-| `0xFFE7` | GitHub | `git` |
+| `0xFFE7` | QR content | `qr` |
 
 - **Avatar characteristics** (write-only):
 

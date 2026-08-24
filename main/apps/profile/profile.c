@@ -68,7 +68,7 @@ void profile_enter(app_page_t page)
     ds_header(s_scr, "PROFILE", bsp_battery_soc(),
               &badge_font_gb2312_small, &lv_font_montserrat_14);
 
-    // 纯文字档案:姓名 → 职位 → 分隔线 → 状态 → 简介 → 网站 → GitHub
+    // 纯文字档案:姓名 → 职位 → 分隔线 → 状态 → 简介(不展示任何链接文本)
     s_y = 56;
     place_line(s_scr, badge_data_get(BADGE_FIELD_NAME), &badge_font_gb2312,
                DS_TEXT_PRIMARY, 42);
@@ -77,10 +77,6 @@ void profile_enter(app_page_t page)
     place_divider(s_scr);
     place_status(s_scr);
     place_line(s_scr, badge_data_get(BADGE_FIELD_BIO), &badge_font_gb2312_small,
-               DS_TEXT_SECONDARY, 26);
-    place_line(s_scr, badge_data_get(BADGE_FIELD_WEBSITE), &badge_font_gb2312_small,
-               DS_TEXT_SECONDARY, 26);
-    place_line(s_scr, badge_data_get(BADGE_FIELD_GITHUB), &badge_font_gb2312_small,
                DS_TEXT_SECONDARY, 26);
 
     // Footer:Page Indicator(PROFILE=第 1 点实心)

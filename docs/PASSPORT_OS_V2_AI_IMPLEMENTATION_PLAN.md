@@ -2330,7 +2330,7 @@ Hardware: 待真机验证(BLE 写 qr → CARDS 二维码变化；PROFILE 无链�
 Git Commit：
 
 ```text
-xxx；（提交后回填）
+12f26d5
 ```
 
 ---

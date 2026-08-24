@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/assets/passport-os-v2.jpg" alt="Passport OS V2" width="180" style="border-radius:12px"/>
-</p>
-
 <h1 align="center">Passport OS V2</h1>
 
 <h3 align="center">低功耗个人智能电子工牌固件 · ESP32-C3</h3>
@@ -19,6 +15,12 @@
   <a href="#"><img alt="蓝牙" src="https://img.shields.io/badge/BLE-NimBLE%20GATT-4CA0D9.svg"/></a>
   <a href="#"><img alt="SDK" src="https://img.shields.io/badge/ESP--IDF-5.5-green.svg"/></a>
   <a href="#"><img alt="LVGL" src="https://img.shields.io/badge/LVGL-9.5-purple.svg"/></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/passport-os-v2.jpg" alt="Passport OS V2" width="320" style="border-radius:12px"/>
+  <br/>
+  <em>Passport OS V2 — 个人智能电子工牌实机展示</em>
 </p>
 
 > 这是一套基于 **ESP32-C3** 的**低功耗个人智能工牌**固件（原 FoloToy AI Passport 渐进式产品化改造而来）。

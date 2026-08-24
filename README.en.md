@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/assets/passport-os-v2.jpg" alt="Passport OS V2" width="180" style="border-radius:12px"/>
-</p>
-
 <h1 align="center">Passport OS V2</h1>
 
 <h3 align="center">Low-Power Personal Smart Badge Firmware · ESP32-C3</h3>
@@ -19,6 +15,12 @@
   <a href="#"><img alt="Bluetooth" src="https://img.shields.io/badge/BLE-NimBLE%20GATT-4CA0D9.svg"/></a>
   <a href="#"><img alt="SDK" src="https://img.shields.io/badge/ESP--IDF-5.5-green.svg"/></a>
   <a href="#"><img alt="LVGL" src="https://img.shields.io/badge/LVGL-9.5-purple.svg"/></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/passport-os-v2.jpg" alt="Passport OS V2" width="320" style="border-radius:12px"/>
+  <br/>
+  <em>Passport OS V2 — personal smart badge on device</em>
 </p>
 
 > A **low-power personal smart badge** firmware for the **ESP32-C3** (progressively transformed from the FoloToy AI Passport). It uses **vertical page navigation** on a 240×320 screen to show your electronic identity — name, title, status, and a QR code — with profile and avatar editable over BLE, minimal and high-contrast, built for low power.

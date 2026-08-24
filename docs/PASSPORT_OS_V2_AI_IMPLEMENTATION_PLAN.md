@@ -2368,7 +2368,7 @@ Hardware: 真机已烧录 COM5（30px + 90px 头像 + PROFILE 重排），用户
 Git Commit：
 
 ```text
-xxx；（提交后回填）
+dcf2a6d
 ```
 
 ---

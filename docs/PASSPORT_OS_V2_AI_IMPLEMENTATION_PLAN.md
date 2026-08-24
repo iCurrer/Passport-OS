@@ -1623,18 +1623,76 @@ Git Commit：
 
 # TASK-07：DASHBOARD
 
-# TASK-07：DASHBOARD
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-07 验证记录
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（纯逻辑审查）
+- [ ] Hardware（已烧录；DASHBOARD 页实机未确认）
+- [x] Commit
+
+修改文件（仅 `main/` 应用层；未改 BSP、未改 ui 层）：
+
+- 新增 `main/apps/dashboard/dashboard.h`、`main/apps/dashboard/dashboard.c`（V2 DASHBOARD 页 + 每秒刷新定时器）
+- 修改 `main/app/app_router.c`（DASHBOARD 槽位用 dashboard_enter/exit）
+- 修改 `main/CMakeLists.txt`（加入 apps/dashboard）
+
+明细：
+
+- **诚实无假数据**：本机无 RTC、Wi-Fi/BLE 默认关，无可靠墙钟来源 → 不造假时间/日期。
+- 展示真实状态：**UPTIME**（esp_timer 运行时长,大号数字实时刷新）、本页 **FOCUS** 会话计时、**BLE/WIFI** 开关、NEXT 日程占位 "NONE"。
+- 每秒用 `lv_timer`(LVGL 任务内)刷新 UPTIME 与 FOCUS;**退出先 `lv_timer_del` 再删对象**(红线)。
+
+UI 验证（静态坐标审查，Content 36–271）：
+
+- [x] UPTIME 大号数字 y56、标签 86、分隔线 112、4 行状态 y132..198(步进 22) —— 均在 Content 内,不触 Footer(272)
+- [ ] 实机 UPTIME/FOCUS 秒级刷新与数字渲染（未实机确认）
+- [ ] 实机 BLE/WIFI 状态显示（未实机确认）
+
+功能验证（纯逻辑审查）：
+
+- [x] lv_timer 创建/销毁路径(dashboard_exit 先停再删)
+- [x] UPTIME 秒→HH:MM:SS、FOCUS 秒→MM:SS 格式换算
+- [x] BLE 状态读 ble_is_enabled();WIFI 未启用恒 OFF(诚实)
+- [ ] 实机定时器刷新与退出无泄漏（未实机确认）
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（dashboard.c 编译通过;.bin=0x2e40f0,App 分区剩 28%）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 无 RTC → 无墙钟时间/日期,以 UPTIME 代替;若后续要真时间需接 SNTP(Wi-Fi,违反默认关)或外部 RTC。
+- NEXT 日程无数据源,占位 "NONE";未来可从 NVS 读取日程或接入 BLE 同步。
+- FOCUS 为"本页会话"计时,非真实工作会话;语义可后续调整。
 
 ---
+
+# TASK-08：TOOLS
 
 # TASK-08：TOOLS
 

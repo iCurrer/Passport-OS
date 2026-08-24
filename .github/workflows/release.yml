@@ -19,21 +19,19 @@ jobs:
           esp_idf_version: v5.5.5
           target: esp32c3
           path: "."
-          command: "idf.py build"
-      - name: Merge into single full 8MB image
-        run: |
-          # 把 bootloader + partition-table + app 合并成一个可直接烧录的完整 8MB 固件
-          esptool.py --chip esp32c3 merge_bin \
-            --flash_mode dio --flash_freq 80m --flash_size 8MB \
-            -o FoloToy-AI-Passport-8M.bin \
-            0x0 build/bootloader/bootloader.bin \
-            0x8000 build/partition_table/partition-table.bin \
-            0x10000 build/FoloToy-AI-Passport.bin
+          # build 后用 idf.py merge-bin 合并成单个完整 8MB 固件(同一 IDF 环境/项目目录;
+          # merge-bin 在 build/ 下执行,所以文件路径不带 build/ 前缀,已验证)
+          command: |
+            idf.py build
+            idf.py merge-bin -o FoloToy-AI-Passport-8M.bin --fill-flash-size 8MB \
+              0x0 bootloader/bootloader.bin \
+              0x8000 partition_table/partition-table.bin \
+              0x10000 FoloToy-AI-Passport.bin
       - name: Upload merged firmware as artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: FoloToy-AI-Passport-8M.bin
+          path: build/FoloToy-AI-Passport-8M.bin
 
   android:
     name: Build Android app (debug APK)

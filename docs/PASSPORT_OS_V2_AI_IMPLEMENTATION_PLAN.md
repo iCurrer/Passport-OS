@@ -2333,13 +2333,25 @@ idf.py build
 结果：PASS（exit 0，无代码告警；.bin = 0x2f1e30，App 分区剩 26% free）
 UI: STATIC REVIEW PASS —— 入口页/菜单/子屏坐标均在 Content 36–271 内，不触 Footer
 Function: 三态状态机静态审查 + 既有主机自检脚本仍 PASS
-Hardware: NOT TESTED（未连板，翻页恢复与长按返回需真机确认）
+Hardware: PASS（真机 COM5 实测：清单 #1–#9 全部通过，见下）
 ```
+
+真机验证记录（2026-08-24，COM5，`idf.py -p COM5 -b 460800 flash`，bootloader+partition-table+app 三件套，哈希校验通过后 hard reset）：
+
+- [x] 开机默认 HOME，正常显示
+- [x] 短按 DOWN 连续翻页穿过页面 1–5，顺畅
+- [x] 短按 DOWN 翻到 TOOLS→GAMES→SETTINGS 入口态，**能继续翻页（本次修复核心）**
+- [x] TOOLS 入口按 OK 进入菜单，UP/DOWN 选择
+- [x] 菜单内长按 OK 返回入口态
+- [x] 选 STOPWATCH→OK 进秒表；秒表内长按 OK 返回菜单态
+- [x] GAMES 入口 OK→CATCH 进游戏；结束/长按 OK 回游戏菜单
+- [x] SETTINGS 入口 OK→菜单；切 BLE 开关，值列 ON/OFF 刷新
+- [x] 任意页入口态长按 OK/UP 回 HOME
 
 Git Commit：
 
 ```text
-3a79116
+3a79116（功能）；88775d7（补记哈希）
 ```
 
 ---

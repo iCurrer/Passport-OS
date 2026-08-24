@@ -150,17 +150,20 @@ V2 TASK-01 将新增/改造 design-system 原语；本文件只定义**页面级
 
 ## 7. PAGE 1 — PROFILE（完整档案）
 
+> 纯文字版（v2.0 按用户反馈去掉头像，仅文字展示）。
+
 ```
 ┌────────────────────────────────────────┐
 │  PROFILE                          86%  │
 ├────────────────────────────────────────┤
-│              ┌────────┐                │
-│              │ AVATAR │  64~80 居中     │
-│              └────────┘                │
-│       JOHN LEE         (20px 主)        │
-│       Accounting       (14px 次)        │
-│       AI · PHOTO · RADIO (14px 标签)    │
-│       Shanghai         (14px 次要)     │
+│                                        │
+│          JOHN LEE         (24px 主)     │
+│          Accounting       (14px 次)     │
+│          ──────────────── (强调分隔线)  │
+│          ● AVAILABLE      (14px 强调)   │
+│          Vibe coding…     (14px 次)     │
+│          example.com      (14px 次)     │
+│          github.com/…     (14px 次)     │
 │                                        │
 │          ○ ● ○ ○ ○ ○ ○ ○             │
 └────────────────────────────────────────┘
@@ -168,13 +171,17 @@ V2 TASK-01 将新增/改造 design-system 原语；本文件只定义**页面级
 
 | 元素 | 坐标 |
 | --- | --- |
-| 头像 | 水平居中宽约 64–80，Content 上段 y≈48 起 |
-| 姓名 | 居中 y≈170 |
-| 职位 | 副标题 y≈196 |
-| 标签行（top/bio 摘要） | y≈222 |
-| 位置/站点 | y≈248 |
+| 姓名 name | 居中 y≈56，24px 主色 |
+| 职位 title | 居中 y≈98，14px 次要 |
+| 强调分隔线 | 居中(宽 72, x 84..156) y≈122，`#4CD964` |
+| 状态 status | 色点+文字成组居中 y≈148，强调色 |
+| 简介 bio | 居中 y≈178，14px 次要 |
+| 网站 website | 居中 y≈204，14px 次要 |
+| GitHub github | 居中 y≈230，14px 次要 |
 
-展示完整 profile：name / title / bio / status / website、github。
+展示完整 profile：name / title / status / bio / website / github。
+
+> 布局要点：垂直累计 y 游标，字段为空时**自动收起不留空行**；在场字段全满时末行 y≈230..244，仍 <271（Content 底部），不触 Footer(272)。无头像、无复杂卡片，极简高对比。
 
 ---
 

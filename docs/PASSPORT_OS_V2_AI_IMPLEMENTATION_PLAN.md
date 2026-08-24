@@ -1203,6 +1203,7 @@ UI 验证（静态坐标复查）：
 - [x] ds_page_dots_set 高亮切换不重建对象（复用 apply_dot）
 - [x] ds_header 电量 fill 宽度 clamp、<20%/<10% 变色、SOC=-1 显示 "--"
 - [x] 返回 ref 的 brand/fill/pct 可被调用方持有并刷新
+- [x] 主机坐标自检 `tests/ds_geometry_check.py`：Header / Page Indicator 全部 13 项断言 PASS（水平居中、越界、重叠、footer 带）
 - [ ] 实机渲染（NO_BOARD，未验证）
 
 编译：

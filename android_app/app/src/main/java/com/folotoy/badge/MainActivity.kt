@@ -81,6 +81,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var readBtn: MaterialButton
     private lateinit var writeBtn: MaterialButton
     private lateinit var passportPreview: PassportPreviewView
+    private var userAvatar: Bitmap? = null          // 用户选/上传的头像(80×80),预览用
+
+    // 两页切换
+    private lateinit var editContainer: LinearLayout
+    private lateinit var previewContainer: LinearLayout
+    private lateinit var tabEdit: MaterialButton
+    private lateinit var tabPreview: MaterialButton
 
     // 图库选头像
     private val pickAvatarLauncher =
@@ -110,244 +117,208 @@ class MainActivity : ComponentActivity() {
         ensurePermissions()
     }
 
-    // ---------- UI(使用 Material3 组件构建) ----------
+    // ---------- UI(使用 Material3 组件构建,双页切换) ----------
     private fun buildUi() {
-        // 根容器:浅灰背景 + 垂直滚动
         val scrollView = ScrollView(this).apply {
             setBackgroundColor(themeColor(com.google.android.material.R.attr.colorSurface))
             setClipToPadding(false)
-            // 顶部/左右留白,避免内容顶到状态栏或贴边
-            setPadding(dp(20), dp(24), dp(20), dp(24))
+            setPadding(dp(16), dp(16), dp(16), dp(16))
         }
-
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, 0, dp(12))
         }
 
-        // ---- 顶部标题区域 ----
-        val headerCard = MaterialCardView(this).apply {
-            setCardBackgroundColor(ContextCompat.getColor(context, android.R.color.transparent))
-            cardElevation = 0f
-            strokeWidth = 0
-            radius = 0f
-            setContentPadding(dp(4), dp(8), dp(4), dp(0))
-        }
-        val headerInner = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        headerInner.addView(TextView(this).apply {
+        // ---- App 标题 ----
+        root.addView(TextView(this).apply {
             text = "AI 名牌"
-            textSize = 26f
+            textSize = 24f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurface))
+            gravity = Gravity.CENTER
+            setPadding(0, dp(8), 0, dp(12))
         })
-        headerInner.addView(TextView(this).apply {
-            text = "AI 电子名牌配置工具"
-            textSize = 14f
-            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
-            setPadding(0, dp(2), 0, 0)
-        })
-        headerCard.addView(headerInner)
-        root.addView(headerCard)
 
-        // ---- 连接状态区域 ----
+        // ---- Tab 栏 ----
+        val tabRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        fun tabButton(label: String, initSelected: Boolean): MaterialButton {
+            return MaterialButton(this@MainActivity).apply {
+                text = label
+                textSize = 15f
+                cornerRadius = dp(20)
+                strokeWidth = 0
+                isAllCaps = false
+                setPadding(dp(32), dp(0), dp(32), dp(0))
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)
+                ).apply { marginEnd = dp(8) }
+            }
+        }
+        tabEdit = tabButton("编辑", true)
+        tabPreview = tabButton("预览", false)
+        tabRow.addView(tabEdit)
+        tabRow.addView(tabPreview)
+        root.addView(tabRow)
+
+        // ---- 页 1:编辑 ----
+        editContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        // 连接状态
         val statusCard = MaterialCardView(this).apply {
-            radius = dp(16).toFloat()
-            cardElevation = dp(2).toFloat()
-            strokeWidth = 0
-            setContentPadding(dp(16), dp(14), dp(16), dp(14))
+            radius = dp(16).toFloat(); cardElevation = dp(2).toFloat()
+            strokeWidth = 0; setContentPadding(dp(16), dp(14), dp(16), dp(14))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(16) }
+            ).apply { topMargin = dp(12) }
         }
-
         val statusRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
         }
-
         statusChip = Chip(this).apply {
-            text = "未连接"
-            chipIcon = null
+            text = "未连接"; chipIcon = null
             setChipBackgroundColorResource(com.google.android.material.R.color.m3_sys_color_dynamic_dark_on_surface)
             setTextColor(ContextCompat.getColor(this@MainActivity, android.R.color.white))
-            textSize = 13f
-            chipMinHeight = dp(32).toFloat()
-            isClickable = false
-            isCheckable = false
+            textSize = 13f; chipMinHeight = dp(32).toFloat()
+            isClickable = false; isCheckable = false
         }
-
         scanBtn = MaterialButton(this).apply {
-            text = "扫描"
-            textSize = 14f
-            setIconResource(android.R.drawable.ic_menu_search)
-            iconSize = dp(18)
+            text = "扫描"; textSize = 14f
+            setIconResource(android.R.drawable.ic_menu_search); iconSize = dp(18)
             iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            setOnClickListener { startScan() }
-            strokeWidth = 0
-            cornerRadius = dp(20)
+            setOnClickListener { startScan() }; strokeWidth = 0; cornerRadius = dp(20)
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)
             ).apply { marginStart = dp(12) }
         }
+        statusRow.addView(statusChip); statusRow.addView(scanBtn)
+        statusCard.addView(statusRow); editContainer.addView(statusCard)
 
-        statusRow.addView(statusChip)
-        statusRow.addView(scanBtn)
-        statusCard.addView(statusRow)
-        root.addView(statusCard)
-
-        // ---- 输入表单卡片 ----
+        // 表单
         val formCard = MaterialCardView(this).apply {
-            radius = dp(20).toFloat()
-            cardElevation = dp(2).toFloat()
-            strokeWidth = 0
-            setContentPadding(dp(16), dp(16), dp(16), dp(8))
+            radius = dp(20).toFloat(); cardElevation = dp(2).toFloat()
+            strokeWidth = 0; setContentPadding(dp(16), dp(16), dp(16), dp(8))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(16) }
+            ).apply { topMargin = dp(12) }
         }
-        val form = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-
-        fun field(label: String, default: String = ""): EditText {
+        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun field(label: String): EditText {
             val til = TextInputLayout(this@MainActivity).apply {
-                // 用浮动标签作字段名,避免与框内文字重叠
-                this.hint = label
-                boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
+                this.hint = label; boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_OUTLINE
                 setBoxCornerRadii(dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat(), dp(12).toFloat())
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = dp(8) }
+                ).apply { topMargin = dp(6) }
             }
-            val et = EditText(this@MainActivity).apply {
-                setText(default)
-                textSize = 16f
-                maxLines = 1
-            }
-            til.addView(et)
-            form.addView(til)
-            return et
+            val et = EditText(this@MainActivity).apply { textSize = 16f; maxLines = 1 }
+            til.addView(et); form.addView(til); return et
         }
+        nameEt = field("姓名"); topEt = field("顶部文字"); titleEt = field("职位")
+        statusEt = field("状态"); bioEt = field("简介"); websiteEt = field("网站"); githubEt = field("GitHub")
+        formCard.addView(form); editContainer.addView(formCard)
 
-        nameEt = field("姓名")
-        topEt = field("顶部文字")
-        titleEt = field("职位")
-        statusEt = field("状态")
-        bioEt = field("简介")
-        websiteEt = field("网站")
-        githubEt = field("GitHub")
-
-        formCard.addView(form)
-        root.addView(formCard)
-
-        // ---- 240×320 Passport Preview(实时预览) ----
-        val previewCard = MaterialCardView(this).apply {
-            radius = dp(20).toFloat()
-            cardElevation = dp(2).toFloat()
-            strokeWidth = 0
-            setContentPadding(dp(16), dp(16), dp(16), dp(16))
+        // 操作按钮
+        val actionCard = MaterialCardView(this).apply {
+            radius = dp(20).toFloat(); cardElevation = dp(2).toFloat()
+            strokeWidth = 0; setContentPadding(dp(16), dp(12), dp(16), dp(12))
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(16) }
+            ).apply { topMargin = dp(12) }
         }
-        val previewColumn = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val actionRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
         }
-        previewColumn.addView(TextView(this).apply {
-            text = "Passport 预览"
-            textSize = 15f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurface))
-        })
+        readBtn = MaterialButton(this).apply {
+            text = "读取"; textSize = 14f
+            setIconResource(android.R.drawable.ic_menu_upload); iconSize = dp(18)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setOnClickListener { readAll() }; strokeWidth = dp(1)
+            strokeColor = ColorStateList.valueOf(themeColor(com.google.android.material.R.attr.colorPrimary))
+            cornerRadius = dp(20)
+            layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f)
+        }
+        writeBtn = MaterialButton(this).apply {
+            text = "写入名牌"; textSize = 14f
+            setIconResource(android.R.drawable.ic_menu_send); iconSize = dp(18)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setOnClickListener { writeAll() }; strokeWidth = 0; cornerRadius = dp(20)
+            layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(12) }
+        }
+        actionRow.addView(readBtn); actionRow.addView(writeBtn)
+        actionCard.addView(actionRow); editContainer.addView(actionCard)
+        editContainer.visibility = View.VISIBLE
+        root.addView(editContainer)
+
+        // ---- 页 2:预览 ----
+        previewContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; visibility = View.GONE
+        }
+        val previewCard = MaterialCardView(this).apply {
+            radius = dp(16).toFloat(); cardElevation = dp(2).toFloat()
+            strokeWidth = 0; setContentPadding(dp(16), dp(16), dp(16), dp(16))
+            setCardBackgroundColor(0xFF1A1A1A.toInt())
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = dp(12) }
+        }
+        val previewCol = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         passportPreview = PassportPreviewView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(8) }
-        }
-        previewColumn.addView(passportPreview)
-        previewColumn.addView(MaterialButton(this).apply {
-            text = "选择图片并上传头像"
-            textSize = 14f
-            setOnClickListener { pickAvatarLauncher.launch("image/*") }
-            strokeWidth = 0
-            cornerRadius = dp(20)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(44)
-            ).apply { topMargin = dp(8) }
-        })
-        previewCard.addView(previewColumn)
-        root.addView(previewCard)
-
-        // 编辑任一字段即实时刷新预览
-        val watcher = object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                passportPreview.invalidate()
-            }
-        }
-        listOf(nameEt, topEt, titleEt, statusEt, bioEt, websiteEt, githubEt)
-            .forEach { it.addTextChangedListener(watcher) }
-
-        // ---- 操作按钮卡片 ----
-        val actionCard = MaterialCardView(this).apply {
-            radius = dp(20).toFloat()
-            cardElevation = dp(2).toFloat()
-            strokeWidth = 0
-            setContentPadding(dp(16), dp(16), dp(16), dp(16))
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dp(16) }
-        }
-        val actionInner = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-
-        readBtn = MaterialButton(this).apply {
-            text = "读取"
-            textSize = 14f
-            setIconResource(android.R.drawable.ic_menu_upload)
-            iconSize = dp(18)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            setOnClickListener { readAll() }
-            strokeWidth = dp(1)
-            strokeColor = ColorStateList.valueOf(themeColor(com.google.android.material.R.attr.colorPrimary))
-            cornerRadius = dp(20)
-            layoutParams = LinearLayout.LayoutParams(
-                0, dp(44), 1f
             )
         }
+        previewCol.addView(passportPreview)
 
-        writeBtn = MaterialButton(this).apply {
-            text = "写入名牌"
-            textSize = 14f
-            setIconResource(android.R.drawable.ic_menu_send)
-            iconSize = dp(18)
-            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-            setOnClickListener { writeAll() }
-            strokeWidth = 0
-            cornerRadius = dp(20)
+        // 头像上传按钮
+        previewCol.addView(MaterialButton(this).apply {
+            text = "选择图片并上传头像"; textSize = 14f
+            setOnClickListener { pickAvatarLauncher.launch("image/*") }
+            strokeWidth = 0; cornerRadius = dp(20)
             layoutParams = LinearLayout.LayoutParams(
-                0, dp(44), 1f
-            ).apply { marginStart = dp(12) }
-        }
-
-        actionInner.addView(readBtn)
-        actionInner.addView(writeBtn)
-        actionCard.addView(actionInner)
-        root.addView(actionCard)
-
-        // ---- 底部提示 ----
-        root.addView(TextView(this).apply {
-            text = "确保名牌处于广播状态，连接后即可读取/写入"
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44)
+            ).apply { topMargin = dp(12) }
+        })
+        previewCol.addView(TextView(this).apply {
+            text = "头像在 App 内实时同步;上传后名牌需重新进入 HOME 页显示"
             textSize = 12f
             setTextColor(themeColor(com.google.android.material.R.attr.colorOnSurfaceVariant))
             gravity = Gravity.CENTER
-            setPadding(0, dp(16), 0, 0)
+            setPadding(0, dp(8), 0, 0)
         })
+        previewCard.addView(previewCol)
+        previewContainer.addView(previewCard)
+        root.addView(previewContainer)
+
+        // ---- Tab 切换逻辑 ----
+        val activeBg = themeColor(com.google.android.material.R.attr.colorPrimary)
+        val inactiveBg = ContextCompat.getColor(this, android.R.color.transparent)
+        val activeText = ContextCompat.getColor(this, android.R.color.white)
+        val inactiveText = themeColor(com.google.android.material.R.attr.colorOnSurfaceVariant)
+
+        fun selectTab(idx: Int) {
+            val isEdit = (idx == 0)
+            editContainer.visibility = if (isEdit) View.VISIBLE else View.GONE
+            previewContainer.visibility = if (isEdit) View.GONE else View.VISIBLE
+            tabEdit.setBackgroundColor(if (isEdit) activeBg else inactiveBg)
+            tabEdit.setTextColor(if (isEdit) activeText else inactiveText)
+            tabPreview.setBackgroundColor(if (isEdit) inactiveBg else activeBg)
+            tabPreview.setTextColor(if (isEdit) inactiveText else activeText)
+        }
+        tabEdit.setOnClickListener { selectTab(0) }
+        tabPreview.setOnClickListener { selectTab(1) }
+        selectTab(0)
+
+        // ---- 编辑字段变更→实时刷新预览 ----
+        val watcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { passportPreview.invalidate() }
+        }
+        listOf(nameEt, topEt, titleEt, statusEt, bioEt, websiteEt, githubEt)
+            .forEach { it.addTextChangedListener(watcher) }
 
         scrollView.addView(root)
         setContentView(scrollView)
@@ -570,8 +541,17 @@ class MainActivity : ComponentActivity() {
         } catch (_: Exception) { null }
         if (bmp == null) { setConnectionState(ConnectionState.ERROR, "图片解码失败"); return }
         try {
-            val rgb = toRgb565Le(centerCropSquare(bmp))
+            val square = centerCropSquare(bmp)
             bmp.recycle()
+            val avatar80 = Bitmap.createScaledBitmap(square, AV_W, AV_H, true)
+            square.recycle()
+            // 存储用于预览显示,并立即刷新
+            userAvatar?.recycle()
+            userAvatar = avatar80.copy(avatar80.config ?: Bitmap.Config.ARGB_8888, true)
+            passportPreview.invalidate()
+            // 上传 RGB565
+            val rgb = toRgb565Le(avatar80)
+            avatar80.recycle()
             uploadAvatar(rgb)
         } catch (e: Exception) {
             setConnectionState(ConnectionState.ERROR, "头像处理失败")
@@ -633,10 +613,11 @@ class MainActivity : ComponentActivity() {
         try { gatt?.disconnect() } catch (_: Exception) {}
         try { gatt?.close() } catch (_: Exception) {}
         gatt = null
+        userAvatar?.recycle(); userAvatar = null
         super.onDestroy()
     }
 
-    // ---------- 240×320 Passport 预览视图(按 4:3 比例缩放) ----------
+    // ---------- 240×320 Passport 预览视图(匹配真机 HOME 页布局) ----------
     inner class PassportPreviewView(context: Context) : View(context) {
         private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
         private val cBg = 0xFF000000.toInt()
@@ -645,6 +626,7 @@ class MainActivity : ComponentActivity() {
         private val cAccent = 0xFF4CD964.toInt()
         private val cLine = 0xFF1F1F1F.toInt()
         private val cAvatar = 0xFF2A2A2A.toInt()
+        private val avatarRect = android.graphics.RectF()   // 复用,避免每帧分配
 
         // 保持 240:320(4:3)比例
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -654,46 +636,59 @@ class MainActivity : ComponentActivity() {
 
         override fun onDraw(canvas: android.graphics.Canvas) {
             val w = width.toFloat()
-            val s = w / 240f   // 240px 参考宽度缩放
+            val s = w / 240f
 
             canvas.drawColor(cBg)
 
-            // 顶部文字(左上)
+            // ---- Header:顶部文字 + 电量 ----
             drawText(canvas, 16 * s, 26 * s, topEt.text.toString().ifEmpty { "FoloToy" },
                 cWhite, 14f, false, android.graphics.Paint.Align.LEFT)
-            // 电量(右上,占位静态)
             drawText(canvas, 224 * s, 26 * s, "86%", cGray, 12f, false,
                 android.graphics.Paint.Align.RIGHT)
-
-            // 分隔线
             paint.color = cLine
             canvas.drawRect(0f, 34 * s, w, 34 * s + 2f * s, paint)
 
-            // 头像占位(灰圆角方块,居中上段)
-            val avW = 56f * s
-            val avH = 110f * s
-            val avX = (w - avW) / 2f
+            // ---- 头像:80×80 居中(与真机 HOME 一致 y=56) ----
+            val avS = 80f * s          // 头像在预览中的显示尺寸
+            val avX = (w - avS) / 2f
             val avY = 56f * s
-            paint.color = cAvatar
-            canvas.drawRoundRect(avX, avY, avX + avW, avY + avH, 8f * s, 8f * s, paint)
+            avatarRect.set(avX, avY, avX + avS, avY + avS)
+            val av = userAvatar
+            if (av != null) {
+                canvas.drawBitmap(av, null, avatarRect, paint)
+            } else {
+                paint.color = cAvatar
+                canvas.drawRoundRect(avatarRect, 8f * s, 8f * s, paint)
+            }
 
-            // 姓名 / 职位 / 状态(居中)
-            drawText(canvas, w / 2f, 208f * s, nameEt.text.toString().ifEmpty { "姓名" },
+            // ---- 姓名 / 职位 / 状态 ----
+            drawText(canvas, w / 2f, 178f * s, nameEt.text.toString().ifEmpty { "姓名" },
                 cWhite, 24f, true, android.graphics.Paint.Align.CENTER)
-            drawText(canvas, w / 2f, 232f * s, titleEt.text.toString(), cGray, 14f, false,
+            drawText(canvas, w / 2f, 212f * s, titleEt.text.toString(), cGray, 14f, false,
                 android.graphics.Paint.Align.CENTER)
-            drawText(canvas, w / 2f, 256f * s, statusEt.text.toString(), cAccent, 14f, false,
-                android.graphics.Paint.Align.CENTER)
+            // 状态:色点 + 文字
+            val st = statusEt.text.toString()
+            if (st.isNotEmpty()) {
+                val stSize = 14f * s
+                paint.textSize = stSize
+                paint.typeface = android.graphics.Typeface.DEFAULT
+                val stW = paint.measureText(st)
+                val dotR = 3f * s
+                val gap = 10f * s
+                val totalW = dotR * 2 + gap + stW
+                val stX = (w - totalW) / 2f
+                paint.color = cAccent
+                canvas.drawCircle(stX + dotR, 244f * s + stSize / 2f, dotR, paint)
+                drawText(canvas, stX + dotR * 2 + gap, 244f * s + stSize, st,
+                    cAccent, 14f, false, android.graphics.Paint.Align.LEFT)
+            }
 
-            // 底部 8 点 Page Indicator(第 1 点强调实心)
-            val dot = 6f * s
-            val gap = 12f * s
-            val total = 7 * gap + dot
-            val x0 = (w - total) / 2f
+            // ---- Page Indicator(8 点,第 1 点实心) ----
+            val dot = 6f * s; val gap = 12f * s
+            val total = 7 * gap + dot; val x0 = (w - total) / 2f
             for (i in 0 until 8) {
-                val x = x0 + i * gap
                 paint.color = if (i == 0) cAccent else cGray
-                canvas.drawCircle(x + dot / 2f, 300f * s, dot / 2f, paint)
+                canvas.drawCircle(x0 + i * gap + dot / 2f, 296f * s, dot / 2f, paint)
             }
         }
 

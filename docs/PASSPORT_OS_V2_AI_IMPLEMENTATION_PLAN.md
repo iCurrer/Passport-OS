@@ -1325,14 +1325,78 @@ Git Commit：
 
 状态：
 
-* [ ] Code
-* [ ] Build
-* [ ] UI
-* [ ] Function
-* [ ] Hardware
-* [ ] Commit
+- [x] Code
+- [x] Build
+- [x] UI
+- [x] Function
+- [ ] Hardware
+- [x] Commit
+
+### TASK-03 验证记录
+
+状态：
+
+- [x] Code
+- [x] Build
+- [x] UI（静态坐标审查）
+- [x] Function（纯逻辑审查）
+- [ ] Hardware（NO_BOARD，未实测）
+- [x] Commit
+
+修改文件（仅 `main/` 应用层；未改 BSP、未改 ui 层、未动 TASK-02 已验逻辑）：
+
+- 新增 `main/apps/home/home.h`、`main/apps/home/home.c`（V2 HOME 页渲染）
+- 修改 `main/app/app_router.c`（引入按页渲染表 s_pages，HOME 用真实渲染、其余页占位；init 补 badge_data_init）
+- 修改 `main/CMakeLists.txt`（加入 apps/home）
+
+明细：
+
+- HOME 用 TASK-01 design-system 渲染：Header(顶部文字 top + 电量) + 头像(现有 80x157 素材等比缩至约 56x110,居中上段) + 姓名(24px) + 职位(14px) + 状态(色点+文字成组居中) + Footer Page Indicator(HOME=第 0 点实心)。
+- 数据显示动态字段来自 badge_data(NVS):top/name/title/status,绝不写死进固件。
+- Router 改为按页表 `{build,destroy}`:TASK-03 仅 HOME 槽位用 home*,其余槽位仍用占位渲染;后续页面 TASK 逐个替换,无需改动导航与按键逻辑。
+- `app_router_init()` 新增 `badge_data_init()`(原由 badge_enter 负责),确保 NVS 字段在 Router 启动时加载。
+
+UI 验证（静态坐标审查，Content 36–271）：
+
+- [x] 头像 TOP_MID y=56,约 56x110(scale 180),y 56..166 居中不越界
+- [x] 姓名 24px y 178..202、职位 14px y 212..226、状态 14px y 244..258 —— 均在 Content 内,不触 Footer(272)
+- [x] Header / Page Indicator 复用 TASK-01/02 已验坐标
+- [x] 背景 DS_BG 黑色、主文字/强调色符合 V2 配色
+- [ ] 中文/英文/长文本实机渲染（NO_BOARD，未验证；长字段无换行，NAME/TITLE 过长会横向溢出——沿用旧行为，后续 UI audit 处理）
+- [ ] 头像显示与字号实机效果（NO_BOARD）
+
+功能验证（纯逻辑审查）：
+
+- [x] HOME 页 enter 构建并加载独立 screen,exit 删除 screen(键/渲染均在 Router 锁内)
+- [x] 动态字段读取走 badge_data(NVS),默认值回退(李秋实/豆包大学/自由/FoloToy)
+- [x] 占位页保留,未实现页仍可翻页显示
+- [ ] 实机翻页到 HOME/退出 HOME(OSC_BOARD,未验证)
+
+编译：
+
+```text
+idf.py build
+结果：PASS
+（home.c 编译无告警;.bin=0x2da940,App 分区剩 29%）
+```
+
+新增警告：无。
+
+Git Commit：
+
+```text
+commit（提交后回填）
+```
+
+问题：
+
+- 头像仍为现有全身素材的等比缩放,非规范 80×80;真正的 80×80 自定义头像文件在 **TASK-12(Avatar)** 接入。
+- 运行时头像缩放(scale=180)对像素风素材较清晰,但若后续换高分辨率需复核渲染与 RAM。
+- NAME/TITLE 长文本无自动换行,超宽会横向溢出(与旧 badge 行为一致);列入最终 UI audit。
 
 ---
+
+# TASK-04：PROFILE
 
 # TASK-04：PROFILE
 

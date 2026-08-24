@@ -11,6 +11,8 @@
 //   - 按键来自 button 组件任务,本文件统一加锁,页面局部操作也在此锁内执行。
 //   - 电源活跃计时/自动休眠复用 badge_power(原由 badge_enter 负责的启动初值在此补上)。
 #include "app_router.h"
+#include "home.h"             // HOME 页真实渲染
+#include "badge_data.h"       // badge_data_init / get(名称/职位/状态/顶部文字)
 #include "badge_power.h"      // badge_power_init / badge_power_key_activity(休眠计时)
 #include "bsp_display.h"      // bsp_lvgl_lock / unlock
 #include "bsp_battery.h"      // bsp_battery_soc(Header 电量)
@@ -31,9 +33,9 @@ static const char *s_titles[APP_PAGE_COUNT] = {
     "DASHBOARD", "TOOLS", "GAMES", "SETTINGS",
 };
 
-// 当前页 UI/状态
-static lv_obj_t   *s_scr;       // 当前页根 screen
-static ds_dots_t   s_dots;      // Page Indicator(Footer)
+// 占位页(未实现页面)状态
+static lv_obj_t   *s_ph_scr;     // 占位页根 screen
+static ds_dots_t   s_ph_dots;    // 占位页 Page Indicator
 static app_page_t  s_cur = APP_PAGE_HOME;
 
 // ============================================================================
@@ -48,27 +50,27 @@ app_page_t app_router_page_cycle(app_page_t cur, int dir)
 
 // ============================================================================
 // 占位页渲染(Header + 居中页码/标题 + Footer 指示器)。须持 LVGL 锁。
-// 后续各页面 TASK 拆出独立渲染器取代本函数。
+// 各页 TASK 实现后,在 s_pages 表里把对应格子换成真实页的 enter/exit。
 // ============================================================================
-static void page_enter(app_page_t page)
+static void app_ph_enter(app_page_t page)
 {
     if (page < 0 || page >= APP_PAGE_COUNT) return;
 
-    s_scr = lv_obj_create(NULL);
-    lv_obj_remove_flag(s_scr, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_style_bg_color(s_scr, lv_color_hex(DS_BG), 0);
-    lv_obj_set_style_border_width(s_scr, 0, 0);
-    lv_obj_set_style_pad_all(s_scr, 0, 0);
+    s_ph_scr = lv_obj_create(NULL);
+    lv_obj_remove_flag(s_ph_scr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_style_bg_color(s_ph_scr, lv_color_hex(DS_BG), 0);
+    lv_obj_set_style_border_width(s_ph_scr, 0, 0);
+    lv_obj_set_style_pad_all(s_ph_scr, 0, 0);
 
     // Header:页标题 + 电量 + 分隔线
-    ds_header(s_scr, s_titles[page], bsp_battery_soc(),
+    ds_header(s_ph_scr, s_titles[page], bsp_battery_soc(),
               &badge_font_gb2312_small, &lv_font_montserrat_14);
 
     // 占位主体:PAGE n/8 + 标题(后续真实页面替换)
     char buf[32];
     snprintf(buf, sizeof(buf), "PAGE %d / %d\n%s",
              (int)page + 1, APP_PAGE_COUNT, s_titles[page]);
-    lv_obj_t *lbl = lv_label_create(s_scr);
+    lv_obj_t *lbl = lv_label_create(s_ph_scr);
     lv_label_set_text(lbl, buf);
     lv_obj_set_style_text_font(lbl, &badge_font_gb2312, 0);
     lv_obj_set_style_text_color(lbl, lv_color_hex(DS_TEXT_PRIMARY), 0);
@@ -77,24 +79,44 @@ static void page_enter(app_page_t page)
     lv_obj_set_y(lbl, 120);
 
     // Footer:Page Indicator
-    ds_footer(s_scr, &s_dots, APP_PAGE_COUNT, page);
+    ds_footer(s_ph_scr, &s_ph_dots, APP_PAGE_COUNT, page);
 
-    lv_screen_load(s_scr);
+    lv_screen_load(s_ph_scr);
 }
 
-static void page_exit(void)
+static void app_ph_exit(void)
 {
-    if (s_scr) { lv_obj_delete(s_scr); s_scr = NULL; }
-    // s_dots 引用的圆点对象随 screen 一并删除,不再使用
+    if (s_ph_scr) { lv_obj_delete(s_ph_scr); s_ph_scr = NULL; }
+    // s_ph_dots 引用的圆点对象随 screen 一并删除,不再使用
 }
+
+// ============================================================================
+// 页面渲染表:每页一个 build/destroy。HOME 用真实渲染,其余页暂用占位。
+// 后续各页面 TASK 逐个把占位格替换为对应 apps/<page> 的 enter/exit。
+// ============================================================================
+typedef struct {
+    void (*build)(app_page_t page);   // 构建并加载该页屏幕(router 已持锁)
+    void (*destroy)(void);            // 销毁该页屏幕
+} app_page_render_t;
+
+static const app_page_render_t s_pages[APP_PAGE_COUNT] = {
+    { home_enter,    home_exit },     // HOME
+    { app_ph_enter,  app_ph_exit },   // PROFILE
+    { app_ph_enter,  app_ph_exit },   // STATUS
+    { app_ph_enter,  app_ph_exit },   // CARDS
+    { app_ph_enter,  app_ph_exit },   // DASHBOARD
+    { app_ph_enter,  app_ph_exit },   // TOOLS
+    { app_ph_enter,  app_ph_exit },   // GAMES
+    { app_ph_enter,  app_ph_exit },   // SETTINGS
+};
 
 // 切换页:退出旧页 → 记录新页 → 渲染新页。须持 LVGL 锁。
 static void goto_page(app_page_t page)
 {
     if (page >= APP_PAGE_COUNT) page = APP_PAGE_HOME;
-    page_exit();
+    s_pages[s_cur].destroy();
     s_cur = page;
-    page_enter(page);
+    s_pages[page].build(page);
 }
 
 // ============================================================================
@@ -168,9 +190,10 @@ void app_router_goto(app_page_t page)
 
 void app_router_init(void)
 {
+    badge_data_init();           // 载入动态字段(NVS):名称/职位/状态/顶部文字(原由 badge_enter 负责)
     badge_power_init();          // 启动自动休眠计时 + 复位诊断(原由 badge_enter 负责)
     s_cur = APP_PAGE_HOME;
-    s_scr = NULL;
+    s_ph_scr = NULL;
     ESP_LOGI(TAG, "router ready, pages=%d", APP_PAGE_COUNT);
 }
 

@@ -1,6 +1,7 @@
 idf_component_register(
     SRCS "main.c"
          "app/app_router.c"
+         "apps/home/home.c"
          "badge/badge.c"
          "badge/badge_data.c"
          "badge/badge_power.c"
@@ -13,6 +14,7 @@ idf_component_register(
          "assets/badge_avatar.c"
     INCLUDE_DIRS "."
          "app"
+         "apps/home"
          "badge"
          "game"
          "settings"

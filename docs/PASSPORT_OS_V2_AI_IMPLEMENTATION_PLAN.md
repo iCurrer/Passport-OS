@@ -2090,7 +2090,7 @@ idf.py build
 Git Commit：
 
 ```text
-commit（提交后回填）
+0313900
 ```
 
 问题：

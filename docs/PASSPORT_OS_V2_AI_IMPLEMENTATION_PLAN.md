@@ -1460,7 +1460,7 @@ idf.py build
 Git Commit：
 
 ```text
-commit（提交后回填）
+f643b3c
 ```
 
 问题：

@@ -2283,7 +2283,7 @@ FoloToy-AI-Passport.bin = 0x2f1f90 bytes；App 分区剩 26% free
 Git Commit：
 
 ```text
-614812e
+cb914ea
 ```
 
 Remarks —— 仍需真机复验项（未连板，按纪律不计 PASS）：

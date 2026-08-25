@@ -50,6 +50,12 @@ void badge_data_init(void)
 
     if (nvs_open(NVS_NS, NVS_READWRITE, &s_nvs) != ESP_OK) { s_nvs = 0; return; }
 
+    // 迁移清理:旧版本用过的 website/github 两个链接字段已被 qr 取代,
+    // 清掉历史固件可能残留在 NVS 里的 key,避免占用空间与歧义。
+    nvs_erase_key(s_nvs, "website");
+    nvs_erase_key(s_nvs, "github");
+    nvs_commit(s_nvs);
+
     // 六个可自定义字段:默认值,预留 BLE 手机修改。
     nvs_load_str(NVS_KEY_NAME,   s_name,   sizeof(s_name),   "李秋实");
     nvs_load_str(NVS_KEY_TOP,    s_top,    sizeof(s_top),    "FoloToy");

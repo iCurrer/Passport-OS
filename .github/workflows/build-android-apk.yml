@@ -1,0 +1,100 @@
+name: Build Android APK
+
+# 触发条件:android_app 目录有改动时、PR、以及 Actions 页面手动触发
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'android_app/**'
+      - '.github/workflows/build-android-apk.yml'
+  pull_request:
+    paths:
+      - 'android_app/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: android_app
+
+env:
+  # Gradle/下载相关:放宽超时 + 遇到错直接打印详细 stacktrace
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dkotlin.daemon.jvm.options=-Xmx1g -Dkotlin.daemon.jvm.options=-Xms256m -Dhttp.socketTimeout=120000 -Dhttp.connectionTimeout=60000"
+  ORG_GRADLE_PROJECT_org.gradle.internal.http.connectionTimeout: "120000"
+  ORG_GRADLE_PROJECT_org.gradle.internal.http.socketTimeout: "120000"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: 设置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 授予 gradlew 执行权限
+        run: chmod +x gradlew
+
+      - name: 构建前检查 gradle wrapper
+        run: |
+          set -e
+          ls -la gradlew gradle/wrapper/gradle-wrapper.*
+          echo "gradle/wrapper/gradle-wrapper.properties:"
+          cat gradle/wrapper/gradle-wrapper.properties
+
+      - name: 构建 Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace --info
+
+      - name: 准备发布产物
+        run: |
+          set -euo pipefail
+          BUILD_DIR=app/build/outputs/apk/debug
+          echo "=== APK 输出目录内容 ==="
+          ls -la "$BUILD_DIR" || { echo "ERROR: 输出目录不存在,构建可能失败了。以下是 build/ 里的 outputs 结构:"; find app/build -maxdepth 4 -type d 2>/dev/null || true; exit 1; }
+          if [ ! -f "$BUILD_DIR/app-debug.apk" ]; then
+            echo "ERROR: 没找到 $BUILD_DIR/app-debug.apk"
+            exit 1
+          fi
+
+          OUT_DIR=artifact
+          mkdir -p "$OUT_DIR"
+          cp "$BUILD_DIR/app-debug.apk" "$OUT_DIR/FoloToy-Badge.apk"
+
+          APK_SIZE=$(stat -c%s "$OUT_DIR/FoloToy-Badge.apk")
+          APK_SHA256=$(sha256sum "$OUT_DIR/FoloToy-Badge.apk" | awk '{print $1}')
+          VERSION_NAME=$(grep -oP "versionName\s+'\K[^']+" app/build.gradle)
+          VERSION_CODE=$(grep -oP "versionCode\s+\K\d+" app/build.gradle)
+          {
+            echo "App: FoloToy Badge (Android)"
+            echo "Build date:  $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "Version:     ${VERSION_NAME} (code ${VERSION_CODE})"
+            echo "Package:     com.folotoy.badge"
+            echo "Min SDK:     26 (Android 8.0 Oreo)"
+            echo "Target SDK:  35"
+            echo "Git commit:  ${GITHUB_SHA::8}"
+            echo "Git ref:     ${GITHUB_REF_NAME}"
+            echo "CI run ID:   ${GITHUB_RUN_ID}"
+            echo ""
+            echo "APK file:    FoloToy-Badge.apk"
+            echo "Size:        ${APK_SIZE} bytes"
+            echo "SHA256:      ${APK_SHA256}"
+          } > "$OUT_DIR/apk_info.txt"
+
+          echo "=== artifact 目录内容 ==="
+          ls -la "$OUT_DIR"
+          echo "=== apk_info.txt ==="
+          cat "$OUT_DIR/apk_info.txt"
+
+      - name: 上传 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android_app/artifact/
+          retention-days: 30

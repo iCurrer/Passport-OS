@@ -51,7 +51,7 @@ void badge_data_init(void)
     if (nvs_open(NVS_NS, NVS_READWRITE, &s_nvs) != ESP_OK) { s_nvs = 0; return; }
 
     // 六个可自定义字段:默认值,预留 BLE 手机修改。
-    nvs_load_str(NVS_KEY_NAME,   s_name,   sizeof(s_name),   "李秋实");
+    nvs_load_str(NVS_KEY_NAME,   s_name,   sizeof(s_name),   "张三");
     nvs_load_str(NVS_KEY_TOP,    s_top,    sizeof(s_top),    "FoloToy");
     nvs_load_str(NVS_KEY_TITLE,  s_title,  sizeof(s_title),  "豆包大学");
     nvs_load_str(NVS_KEY_STATUS, s_status, sizeof(s_status), "自由");
